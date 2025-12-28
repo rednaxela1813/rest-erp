@@ -1,0 +1,16 @@
+asgiref==3.11.0
+Django==6.0
+djangorestframework==3.16.1
+djangorestframework-simplejwt>=5.3
+iniconfig==2.3.0
+packaging==25.0
+pluggy==1.6.0
+psycopg==3.3.2
+psycopg-binary==3.3.2
+psycopg-pool==3.3.0
+Pygments==2.19.2
+pytest==9.0.2
+pytest-django==4.11.1
+python-decouple==3.8
+sqlparse==0.5.5
+typing_extensions==4.15.0

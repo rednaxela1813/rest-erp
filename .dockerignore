@@ -1,0 +1,47 @@
+# VCS / metadata
+.git
+.gitignore
+.dockerignore
+
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*.so
+
+# Environments
+.env
+.env.*
+.envrc
+.venv/
+venv/
+env/
+
+# Tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.coverage
+coverage.xml
+htmlcov/
+.cache/
+
+# Packaging
+*.egg-info/
+dist/
+build/
+
+# Logs / runtime artifacts
+logs/
+*.log
+
+# Database dumps
+db.sqlite3
+*.sqlite3
+
+# IDE / OS noise
+.idea/
+.vscode/
+.DS_Store
+*.swp
+*.swo

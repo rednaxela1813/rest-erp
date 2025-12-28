@@ -1,0 +1,47 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*.so
+
+# Environments
+.env
+.env.*
+.envrc
+.venv/
+venv/
+env/
+
+# Django
+db.sqlite3
+*.sqlite3
+local_settings.py
+media/
+staticfiles/
+tmp/
+logs/
+*.log
+
+# Tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.coverage
+coverage.xml
+htmlcov/
+.cache/
+
+# Packaging
+*.egg-info/
+dist/
+build/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+*.swp
+*.swo
+
+# Archives
+project.zip
