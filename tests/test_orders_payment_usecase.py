@@ -36,12 +36,15 @@ def test_pay_order_uses_usecase_function(admin_client, monkeypatch):
 
     called = {"value": False}
 
+    
     def fake_pay_order(*, order):
         called["value"] = True
-        # минимальная имитация успеха
+        # минимальная имитация успеха, но с соблюдением инварианта модели:
         order.status = "paid"
+        order._status_change_allowed = True
         order.save(update_fields=["status"])
         return order
+
 
     import apps.orders.api_views as api_views
     monkeypatch.setattr(api_views, "pay_order", fake_pay_order)

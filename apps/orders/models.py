@@ -4,16 +4,16 @@ from __future__ import annotations
 from django.db import models
 from decimal import Decimal
 import uuid
+from django.core.exceptions import ValidationError as DjangoValidationError
 
-from config.orgs.models import OrgScopedModel
+
+from config.orgs.models import OrgScopedModel, Organization
+from django.conf import settings
 from apps.products.models import Unit, TaxRate
 from django.db.models import F, Sum, DecimalField, ExpressionWrapper
 
 
-from django.conf import settings
 
-
-from config.orgs.models import Organization  # если у тебя так называется модель org
 
 
 class Order(OrgScopedModel):
@@ -31,15 +31,57 @@ class Order(OrgScopedModel):
         choices=STATUS_CHOICES,
         default=STATUS_DRAFT,
     )
-    
-    
+
     subtotal = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
     tax_total = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
     total = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
-    
+
+    def __init__(self, *args, **kwargs):
+        """
+        Django создаёт объект модели как при загрузке из БД, так и при создании.
+        Мы фиксируем статус "как был загружен", чтобы отловить попытку поменять его напрямую.
+        """
+        super().__init__(*args, **kwargs)
+        self._loaded_status = self.status
+
+    def save(self, *args, **kwargs):
+        """
+        ЖЁСТКИЙ ИНВАРИАНТ:
+        - Нельзя менять Order.status напрямую через model.save().
+        - Статус должен меняться ТОЛЬКО через use-case (pay/cancel),
+          которые:
+            * проверяют FSM переходы
+            * выполняют складские эффекты (если нужно)
+            * пишут OrderStatusEvent
+            * работают атомарно и с row-lock
+
+        Механика:
+        - Если объект уже существует (есть pk) и status изменён относительно _loaded_status,
+          то сохранение запрещаем, если use-case не выставил _status_change_allowed=True.
+        """
+        is_update = self.pk is not None
+        status_changed = is_update and (self.status != getattr(self, "_loaded_status", None))
+        allowed = getattr(self, "_status_change_allowed", False)
+
+        if status_changed and not allowed:
+            raise DjangoValidationError(
+                {"status": "Order.status can only be changed via a use-case (pay/cancel/etc)."}
+            )
+
+        super().save(*args, **kwargs)
+
+        # После успешного сохранения обновляем "загруженный" статус.
+        self._loaded_status = self.status
+
+        # И сбрасываем флаг, чтобы нельзя было повторно использовать этот инстанс для обхода.
+        if hasattr(self, "_status_change_allowed"):
+            self._status_change_allowed = False
+
     def recompute_totals(self) -> None:
         """
-        Minimal: totals = sum(qty * unit_price), tax_total = subtotal * (rate/100) per item, total = subtotal + tax_total
+        Minimal: totals = sum(qty * unit_price),
+        tax_total = subtotal * (rate/100) per item,
+        total = subtotal + tax_total
         """
         items = self.items.select_related("tax_rate").all()
 
@@ -55,13 +97,13 @@ class Order(OrgScopedModel):
         self.subtotal = subtotal.quantize(Decimal("0.01"))
         self.tax_total = tax_total.quantize(Decimal("0.01"))
         self.total = (self.subtotal + self.tax_total).quantize(Decimal("0.01"))
-        
-        
+
     class Meta:
         ordering = ["id"]
 
     def __str__(self) -> str:
         return f"Order {self.public_id}"
+
 
 
 

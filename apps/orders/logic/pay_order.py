@@ -81,10 +81,14 @@ def pay_order(*, order: Order, actor=None) -> Order:
 
         # status change + history event
         old_status = order.status
+        
         order.status = Order.STATUS_PAID
+        order._status_change_allowed = True
         order.save(update_fields=["status", "updated_at"])
 
-        from apps.orders.models import OrderStatusEvent
+        
+
+        
 
         from apps.orders.models import OrderStatusEvent
 

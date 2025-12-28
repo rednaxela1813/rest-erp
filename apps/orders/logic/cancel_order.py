@@ -61,12 +61,15 @@ def cancel_order(*, order: Order, actor=None) -> Order:
             p.save(update_fields=fields)
 
         old_status = locked_order.status
+        
         locked_order.status = Order.STATUS_CANCELLED
+        locked_order._status_change_allowed = True
         locked_order.save(update_fields=["status", "updated_at"])
 
-        from apps.orders.models import OrderStatusEvent
 
         from apps.orders.models import OrderStatusEvent
+
+        
 
         OrderStatusEvent.objects.create(
             org=locked_order.org,

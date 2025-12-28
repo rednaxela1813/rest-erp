@@ -26,8 +26,11 @@ def cancel_draft_order(*, order: Order, actor=None) -> Order:
             raise ValidationError({"status": ["Only draft orders can be cancelled."]})
 
         old_status = order.status
+        
         order.status = Order.STATUS_CANCELLED
+        order._status_change_allowed = True
         order.save(update_fields=["status", "updated_at"])
+
 
         from apps.orders.models import OrderStatusEvent
 
