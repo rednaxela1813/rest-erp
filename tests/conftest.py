@@ -129,3 +129,18 @@ def member_client(auth_client, org_factory, member_factory, set_org_header):
     member_factory(org=org, user=user, role="member")
     set_org_header(client, org)
     return client, user, org
+
+
+from apps.payments.models import OrderPayment
+
+def create_captured_payment_for_order(*, org, order, amount=None):
+    order.refresh_from_db()
+    return OrderPayment.objects.create(
+        org=org,
+        order=order,
+        tender=OrderPayment.Tender.CASH,
+        status=OrderPayment.Status.CAPTURED,
+        amount=amount if amount is not None else order.total,
+        currency="EUR",
+        provider="manual",
+    )

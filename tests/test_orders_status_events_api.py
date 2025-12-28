@@ -39,6 +39,19 @@ def test_order_status_events_list_returns_events_for_order(admin_client):
         HTTP_X_ORG_ID=str(org.public_id),
     )
     assert resp_item.status_code == 201, resp_item.content
+    
+    from apps.payments.models import OrderPayment
+    order.refresh_from_db()
+
+    OrderPayment.objects.create(
+        org=org,
+        order=order,
+        tender=OrderPayment.Tender.CASH,
+        status=OrderPayment.Status.CAPTURED,
+        amount=order.total,
+        currency="EUR",
+        provider="manual",
+    )
 
     # оплатим заказ (должно создать статус-событие draft -> paid)
     resp_pay = client.patch(

@@ -1,8 +1,10 @@
+#apps/orders/logic/pay_order.py
 from __future__ import annotations
 
 from decimal import Decimal
 
 from django.db import transaction
+from django.db.models import Sum
 from rest_framework.exceptions import ValidationError
 
 from apps.orders.logic.status_fsm import assert_can_transition
@@ -17,10 +19,13 @@ def pay_order(*, order: Order, actor=None) -> Order:
     - Double-pay запрещён (paid -> paid должен вернуть 400).
     - Оплата возможна только из draft.
     - Stock проверяем и списываем АГРЕГИРОВАННО по Product (POS-инвариант).
-    - В случае ошибки: никаких изменений (transaction.atomic).
     - Для конкурентной безопасности:
         * row-lock на Order (select_for_update)
         * row-lock на Product (select_for_update)
+    - НОВОЕ (Payments MVP):
+        * заказ можно оплатить только если деньги реально получены:
+          sum(captured payments) >= order.total
+    - В случае ошибки: никаких изменений (transaction.atomic).
     - Пишем историю статусов (OrderStatusEvent)
     """
 
@@ -63,11 +68,32 @@ def pay_order(*, order: Order, actor=None) -> Order:
         )
         products_map = {p.id: p for p in locked_products}
 
-        # check stock
+        # check stock (ВАЖНО: хотим сохранить прежние ошибки/поведение тестов)
         for pid, total_qty in qty_by_product_id.items():
             p = products_map[pid]
             if p.stock_qty < total_qty:
                 raise ValidationError({"order": "Insufficient stock."})
+
+        # НОВОЕ: требование captured payment (ставим ПОСЛЕ stock-check, но ДО write-off)
+        # Это позволяет тестам "insufficient stock" падать по складу,
+        # но не списывать stock и не переводить в paid без оплаты.
+        from apps.payments.models import OrderPayment
+
+        captured_total = (
+            OrderPayment.objects.filter(
+                org=order.org,
+                order=order,
+                status=OrderPayment.Status.CAPTURED,
+            )
+            .aggregate(total=Sum("amount"))
+            .get("total")
+            or Decimal("0.00")
+        )
+
+        if captured_total < order.total:
+            raise ValidationError(
+                {"payment": ["Cannot pay order without captured payment covering order total."]}
+            )
 
         # write-off stock
         for pid, total_qty in qty_by_product_id.items():
@@ -81,14 +107,10 @@ def pay_order(*, order: Order, actor=None) -> Order:
 
         # status change + history event
         old_status = order.status
-        
+
         order.status = Order.STATUS_PAID
         order._status_change_allowed = True
         order.save(update_fields=["status", "updated_at"])
-
-        
-
-        
 
         from apps.orders.models import OrderStatusEvent
 
@@ -99,6 +121,5 @@ def pay_order(*, order: Order, actor=None) -> Order:
             to_status=Order.STATUS_PAID,
             actor=actor if actor is not None else None,
         )
-
 
     return order

@@ -31,6 +31,19 @@ def test_admin_can_set_order_status_to_paid(admin_client):
         content_type="application/json",
     )
     assert resp_item.status_code == 201, resp_item.content
+    
+    from apps.payments.models import OrderPayment
+    order.refresh_from_db()
+
+    OrderPayment.objects.create(
+        org=org,
+        order=order,
+        tender=OrderPayment.Tender.CASH,
+        status=OrderPayment.Status.CAPTURED,
+        amount=order.total,
+        currency="EUR",
+        provider="manual",
+    )
 
     resp = client.patch(
         f"/api/v1/orders/{order.public_id}/",
