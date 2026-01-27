@@ -5,7 +5,7 @@ from rest_framework import serializers
 from config.orgs.org_context import get_request_org
 from apps.products.models import Product, Unit, TaxRate
 
-from .models import Order, OrderItem, OrderStatusEvent
+from .models import KitchenTicket, Order, OrderItem, OrderStatusEvent
 from .logic.status_fsm import assert_can_transition
 
 
@@ -147,3 +147,30 @@ class OrderStatusEventSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = fields
+
+
+class KitchenTicketSerializer(serializers.ModelSerializer):
+    order = serializers.UUIDField(source="order.public_id", read_only=True)
+    product = serializers.UUIDField(source="product.public_id", read_only=True)
+    product_name = serializers.CharField(source="product.name", read_only=True)
+
+    class Meta:
+        model = KitchenTicket
+        fields = ["public_id", "order", "product", "product_name", "qty", "status", "created_at"]
+        read_only_fields = fields
+
+
+class KitchenTicketUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = KitchenTicket
+        fields = ["status"]
+
+    def validate_status(self, value: str) -> str:
+        allowed = {
+            KitchenTicket.Status.IN_PROGRESS,
+            KitchenTicket.Status.DONE,
+            KitchenTicket.Status.CANCELLED,
+        }
+        if value not in allowed:
+            raise serializers.ValidationError("Invalid status.")
+        return value

@@ -1,0 +1,33 @@
+{% if products %}
+  <div class="pos-product-grid">
+    {% for product in products %}
+      <div class="pos-product-card">
+        <div class="pos-product-name">{{ product.name }}</div>
+        <div class="pos-product-meta">
+          {% if product.requires_preparation %}
+            <span class="pos-product-stock">Made to order</span>
+          {% elif product.stock_qty is not None %}
+            <span class="pos-product-stock">Stock {{ product.stock_qty }}</span>
+          {% endif %}
+          <span class="pos-product-price">{{ product.unit_price }} {{ currency }}</span>
+        </div>
+        {% if product.barcode %}
+          <div class="pos-product-barcode">Barcode {{ product.barcode }}</div>
+        {% endif %}
+        <button
+          class="pos-btn pos-btn-outline"
+          hx-post="{% url 'cashier:cart_add' product.id %}"
+          hx-target="#cart-panel"
+          hx-swap="innerHTML"
+        >
+          Add
+        </button>
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="pos-empty">
+    <div class="pos-empty-title">No products</div>
+    <div class="pos-empty-subtitle">Add products or select another org.</div>
+  </div>
+{% endif %}

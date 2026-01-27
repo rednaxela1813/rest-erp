@@ -1,0 +1,28 @@
+{% extends "cashier/base.html" %}
+
+{% block content %}
+<div class="pos-auth">
+  <div class="pos-auth-panel">
+    <div class="pos-auth-brand">Burger Ops</div>
+    <div class="pos-auth-subtitle">Cashier access</div>
+    <div class="pos-auth-title">Sign in to open shift</div>
+
+    {% if error %}
+      <div class="pos-alert">{{ error }}</div>
+    {% endif %}
+
+    <form method="post" class="pos-form">
+      {% csrf_token %}
+      <label class="pos-field">
+        <span>Email</span>
+        <input type="email" name="email" autocomplete="username" required>
+      </label>
+      <label class="pos-field">
+        <span>Password</span>
+        <input type="password" name="password" autocomplete="current-password" required>
+      </label>
+      <button class="pos-btn pos-btn-primary" type="submit">Enter cashier mode</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

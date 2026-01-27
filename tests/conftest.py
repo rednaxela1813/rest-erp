@@ -1,5 +1,6 @@
 # tests/conftest.py
 import uuid
+from decimal import Decimal
 import pytest
 from django.contrib.auth import get_user_model
 
@@ -129,3 +130,32 @@ def member_client(auth_client, org_factory, member_factory, set_org_header):
     member_factory(org=org, user=user, role="member")
     set_org_header(client, org)
     return client, user, org
+
+
+@pytest.fixture
+def payment_factory(db):
+    def _make_payment(*, order, org, amount=Decimal("0.00"), status=None, tender=None, currency="EUR", provider="manual"):
+        from apps.payments.models import OrderPayment
+
+        return OrderPayment.objects.create(
+            org=org,
+            order=order,
+            tender=tender or OrderPayment.Tender.CARD,
+            status=status or OrderPayment.Status.AUTHORIZED,
+            amount=amount,
+            currency=currency,
+            provider=provider,
+        )
+
+    return _make_payment
+
+
+@pytest.fixture
+def capture_payment_api():
+    def _capture(client, payment):
+        return client.post(
+            f"/api/v1/payments/{payment.public_id}/capture/",
+            content_type="application/json",
+        )
+
+    return _capture

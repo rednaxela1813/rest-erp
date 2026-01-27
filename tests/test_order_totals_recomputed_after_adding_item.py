@@ -31,8 +31,8 @@ def test_order_totals_recomputed_after_adding_item(admin_client):
 
     order.refresh_from_db()
     assert order.subtotal == Decimal("10.00")
-    assert order.tax_total == Decimal("2.00")
-    assert order.total == Decimal("12.00")
+    assert order.tax_total == Decimal("1.67")
+    assert order.total == Decimal("10.00")
 
 
 def test_cannot_patch_order_totals(admin_client):
@@ -59,5 +59,4 @@ def test_cannot_patch_order_totals(admin_client):
     assert order.total == 0
     
     
-
 

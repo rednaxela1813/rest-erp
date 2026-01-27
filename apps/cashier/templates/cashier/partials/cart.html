@@ -1,0 +1,106 @@
+<div class="pos-cart">
+  <div class="pos-panel-header">
+    <div>
+      <div class="pos-panel-title">Current order</div>
+      <div class="pos-panel-subtitle">Items in cart: {{ cart_count }}</div>
+    </div>
+    <div>
+      <button
+        class="pos-btn pos-btn-ghost"
+        hx-post="{% url 'cashier:cart_clear' %}"
+        hx-target="#cart-panel"
+        hx-swap="innerHTML"
+      >
+        Clear
+      </button>
+    </div>
+  </div>
+
+  {% if cart_error %}
+    <div class="pos-alert pos-alert-warn">{{ cart_error }}</div>
+  {% endif %}
+
+  {% if cart_items %}
+    <div class="pos-cart-list">
+      {% for item in cart_items %}
+        <div class="pos-cart-item">
+          <div>
+            <div class="pos-cart-name">{{ item.product.name }}</div>
+            <div class="pos-cart-meta">
+              Qty {{ item.qty }} · {{ item.product.unit_price }} each
+            </div>
+          </div>
+          <div class="pos-cart-price">{{ item.line_total }}</div>
+          <div class="pos-cart-actions">
+            <button
+              class="pos-btn pos-btn-outline"
+              hx-post="{% url 'cashier:cart_remove' item.product.id %}"
+              hx-target="#cart-panel"
+              hx-swap="innerHTML"
+            >
+              -
+            </button>
+            <button
+              class="pos-btn pos-btn-outline"
+              hx-post="{% url 'cashier:cart_add' item.product.id %}"
+              hx-target="#cart-panel"
+              hx-swap="innerHTML"
+            >
+              +
+            </button>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="pos-empty">
+      <div class="pos-empty-title">Cart is empty</div>
+      <div class="pos-empty-subtitle">Select items from the menu.</div>
+    </div>
+  {% endif %}
+
+  <div class="pos-cart-footer">
+    <div class="pos-total">
+      <div>
+        <div class="pos-total-label">Total (incl. VAT)</div>
+        <div class="pos-total-value pos-total-strong">{{ totals.total }} {{ currency }}</div>
+      </div>
+      <div>
+        <div class="pos-total-label">VAT included</div>
+        <div class="pos-total-value pos-total-muted">{{ totals.tax_total }} {{ currency }}</div>
+      </div>
+    </div>
+
+    <form class="pos-cart-cta" method="post" action="{% url 'cashier:checkout' %}">
+      {% csrf_token %}
+      <button
+        class="pos-btn pos-btn-primary"
+        type="submit"
+        name="tender"
+        value="card"
+        {% if not cart_items %}disabled{% endif %}
+      >
+        Charge card
+      </button>
+      <button
+        class="pos-btn pos-btn-secondary"
+        type="submit"
+        name="tender"
+        value="cash"
+        {% if not cart_items %}disabled{% endif %}
+      >
+        Cash payment
+      </button>
+    </form>
+
+    <form class="pos-cash-in" method="post" action="{% url 'cashier:cash_in' %}">
+      {% csrf_token %}
+      <div class="pos-cash-in-title">Cash in (change)</div>
+      <div class="pos-cash-in-row">
+        <input type="number" step="0.01" min="0" name="amount" placeholder="Amount">
+        <input type="text" name="reason" placeholder="Reason">
+        <button class="pos-btn pos-btn-ghost" type="submit">Add</button>
+      </div>
+    </form>
+  </div>
+</div>

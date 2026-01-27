@@ -3,7 +3,7 @@ from decimal import Decimal
 
 
 @pytest.mark.django_db
-def test_cancel_paid_order_restores_stock_and_sets_status_cancelled(admin_client):
+def test_cancel_paid_order_restores_stock_and_sets_status_cancelled(admin_client, payment_factory, capture_payment_api):
     """
     GIVEN:
         - Заказ оплачен (paid)
@@ -71,12 +71,8 @@ def test_cancel_paid_order_restores_stock_and_sets_status_cancelled(admin_client
     # ----------------------------------------
     # Arrange: оплачиваем заказ (stock должен списаться)
     # ----------------------------------------
-    resp = client.patch(
-        f"/api/v1/orders/{order.public_id}/",
-        data={"status": "paid"},
-        content_type="application/json",
-        HTTP_X_ORG_ID=str(org.public_id),
-    )
+    payment = payment_factory(order=order, org=org, amount=Decimal("17.50"))
+    resp = capture_payment_api(client, payment)
     assert resp.status_code == 200
 
     product.refresh_from_db()

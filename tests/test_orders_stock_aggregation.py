@@ -3,7 +3,7 @@ from decimal import Decimal
 
 
 @pytest.mark.django_db
-def test_pay_order_aggregates_qty_per_product_and_fails_if_total_exceeds_stock(admin_client):
+def test_pay_order_aggregates_qty_per_product_and_fails_if_total_exceeds_stock(admin_client, payment_factory, capture_payment_api):
     """
     GIVEN:
         - Один заказ (draft)
@@ -90,12 +90,8 @@ def test_pay_order_aggregates_qty_per_product_and_fails_if_total_exceeds_stock(a
     # ----------------------------------------
     # Act 3: пытаемся оплатить заказ
     # ----------------------------------------
-    resp = client.patch(
-        f"/api/v1/orders/{order.public_id}/",
-        data={"status": "paid"},
-        content_type="application/json",
-        HTTP_X_ORG_ID=str(org.public_id),
-    )
+    payment = payment_factory(order=order, org=org, amount=Decimal("17.50"))
+    resp = capture_payment_api(client, payment)
 
     # ----------------------------------------
     # Assert (проверяем бизнес-инварианты)

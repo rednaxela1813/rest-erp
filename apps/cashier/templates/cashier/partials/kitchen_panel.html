@@ -1,0 +1,57 @@
+<div class="pos-kitchen-grid">
+  <div class="pos-kitchen-column">
+    <div class="pos-kitchen-title">Pending</div>
+    {% if pending_tickets %}
+      <div class="pos-ticket-list">
+        {% for ticket in pending_tickets %}
+          <div class="pos-ticket-card">
+            <div>
+              <div class="pos-ticket-name">{{ ticket.product.name }}</div>
+              <div class="pos-ticket-meta">
+                Qty {{ ticket.qty }} · Order {{ ticket.order.public_id|slice:":8" }} · {{ ticket.created_at|date:"H:i" }}
+              </div>
+            </div>
+            <div class="pos-ticket-status">Waiting</div>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="pos-empty">
+        <div class="pos-empty-title">No pending tickets</div>
+        <div class="pos-empty-subtitle">Waiting for new orders.</div>
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="pos-kitchen-column">
+    <div class="pos-kitchen-title">In progress</div>
+    {% if in_progress_tickets %}
+      <div class="pos-ticket-list">
+        {% for ticket in in_progress_tickets %}
+          <div class="pos-ticket-card">
+            <div>
+              <div class="pos-ticket-name">{{ ticket.product.name }}</div>
+              <div class="pos-ticket-meta">
+                Qty {{ ticket.qty }} · Order {{ ticket.order.public_id|slice:":8" }} · {{ ticket.created_at|date:"H:i" }}
+              </div>
+            </div>
+            <form
+              class="pos-ticket-actions"
+              hx-post="{% url 'cashier:kitchen_update' ticket.public_id %}"
+              hx-target="#kitchen-panel"
+              hx-swap="innerHTML"
+            >
+              <button class="pos-btn pos-btn-primary" type="submit" name="status" value="done">Done</button>
+              <button class="pos-btn pos-btn-ghost" type="submit" name="status" value="cancelled">Cancel</button>
+            </form>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="pos-empty">
+        <div class="pos-empty-title">No active tickets</div>
+        <div class="pos-empty-subtitle">Start cooking from the queue.</div>
+      </div>
+    {% endif %}
+  </div>
+</div>

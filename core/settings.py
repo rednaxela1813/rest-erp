@@ -49,6 +49,8 @@ INSTALLED_APPS = [
     "apps.partners",
     "apps.products",
     "apps.orders",
+    "apps.payments",
+    "apps.cashier",
 
 ]
 
@@ -59,6 +61,10 @@ REST_FRAMEWORK = {
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
 }
+
+DEFAULT_CURRENCY = config("DEFAULT_CURRENCY", default="EUR")
+CASHIER_DEVICE_TOKEN = config("CASHIER_DEVICE_TOKEN", default="")
+LOGIN_URL = "/cashier/login/"
 
 
 

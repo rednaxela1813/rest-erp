@@ -1,0 +1,51 @@
+{% extends "cashier/base.html" %}
+
+{% block content %}
+<div class="pos-shell">
+  <header class="pos-header">
+    <div>
+      <div class="pos-brand">Kitchen board</div>
+      <div class="pos-subtitle">FIFO queue · {{ org.name }}</div>
+    </div>
+    <div class="pos-session-card">
+      <div class="pos-session-title">{{ org.name }}</div>
+      <div class="pos-session-meta">
+        Terminal {{ session.terminal.name }} · {{ request.user.email }}
+      </div>
+      <div class="pos-session-actions">
+        <a class="pos-btn pos-btn-outline" href="{% url 'cashier:home' %}">Back to cashier</a>
+      </div>
+      <form method="post" action="{% url 'cashier:logout' %}">
+        {% csrf_token %}
+        <button class="pos-btn pos-btn-ghost" type="submit">Log out</button>
+      </form>
+    </div>
+  </header>
+
+  <section class="pos-panel pos-panel-kitchen">
+    <div class="pos-panel-header">
+      <div>
+        <div class="pos-panel-title">Kitchen queue</div>
+        <div class="pos-panel-subtitle">Oldest tickets are served first</div>
+      </div>
+      <button
+        class="pos-btn pos-btn-primary"
+        hx-post="{% url 'cashier:kitchen_claim_next' %}"
+        hx-target="#kitchen-panel"
+        hx-swap="innerHTML"
+      >
+        Take next
+      </button>
+    </div>
+
+    <div
+      id="kitchen-panel"
+      hx-get="{% url 'cashier:kitchen_panel' %}"
+      hx-trigger="load, every 5s"
+      hx-swap="innerHTML"
+    >
+      {% include "cashier/partials/kitchen_panel.html" %}
+    </div>
+  </section>
+</div>
+{% endblock %}

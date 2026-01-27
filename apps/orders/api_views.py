@@ -3,7 +3,10 @@
 from django.shortcuts import get_object_or_404
 import inspect
 
-from rest_framework import generics
+from rest_framework import generics, status
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from django.db import transaction
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 
@@ -12,9 +15,10 @@ from config.orgs.permissions import IsOrgMemberReadOnlyOrOrgAdmin
 
 from .logic.cancel_draft_order import cancel_draft_order
 from .logic.cancel_order import cancel_order
-from .logic.pay_order import pay_order
-from .models import Order, OrderItem, OrderStatusEvent
+from .models import KitchenTicket, Order, OrderItem, OrderStatusEvent
 from .serializers import (
+    KitchenTicketSerializer,
+    KitchenTicketUpdateSerializer,
     OrderItemCreateSerializer,
     OrderItemSerializer,
     OrderSerializer,
@@ -108,9 +112,9 @@ class OrderDetailApi(generics.RetrieveUpdateAPIView):
         old_status = order.status
 
         if new_status == Order.STATUS_PAID:
-            updated = self._call_usecase(pay_order, order=order)
-            serializer.instance = updated
-            return
+            raise ValidationError(
+                {"status": ["Direct order payment is blocked. Use payment capture endpoint."]}
+            )
 
         if new_status == Order.STATUS_CANCELLED:
             if old_status == Order.STATUS_DRAFT:
@@ -141,3 +145,100 @@ class OrderStatusEventListApi(generics.ListAPIView):
             .select_related("actor", "order")
             .order_by("-created_at", "-id")
         )
+
+
+class KitchenTicketListApi(generics.ListAPIView):
+    permission_classes = [IsAuthenticated, IsOrgMemberReadOnlyOrOrgAdmin]
+    serializer_class = KitchenTicketSerializer
+
+    def get_queryset(self):
+        org = get_request_org(self.request)
+        qs = (
+            KitchenTicket.objects
+            .filter(org=org)
+            .select_related("order", "product")
+            .order_by("created_at", "id")
+        )
+        status_param = self.request.query_params.get("status")
+        if status_param:
+            statuses = [s.strip() for s in status_param.split(",") if s.strip()]
+            qs = qs.filter(status__in=statuses)
+        else:
+            qs = qs.filter(status=KitchenTicket.Status.PENDING)
+        return qs
+
+
+class KitchenTicketUpdateApi(generics.RetrieveUpdateAPIView):
+    permission_classes = [IsAuthenticated, IsOrgMemberReadOnlyOrOrgAdmin]
+    lookup_field = "public_id"
+    lookup_url_kwarg = "public_id"
+
+    def get_queryset(self):
+        org = get_request_org(self.request)
+        return KitchenTicket.objects.filter(org=org).select_related("order", "product")
+
+    def get_serializer_class(self):
+        if self.request.method in ("PATCH", "PUT"):
+            return KitchenTicketUpdateSerializer
+        return KitchenTicketSerializer
+
+
+class KitchenTicketClaimNextApi(APIView):
+    permission_classes = [IsAuthenticated, IsOrgMemberReadOnlyOrOrgAdmin]
+
+    def post(self, request):
+        org = get_request_org(request)
+        with transaction.atomic():
+            ticket = (
+                KitchenTicket.objects
+                .select_for_update()
+                .filter(org=org, status=KitchenTicket.Status.PENDING)
+                .order_by("created_at", "id")
+                .select_related("order", "product")
+                .first()
+            )
+            if not ticket:
+                return Response(status=status.HTTP_204_NO_CONTENT)
+            ticket.status = KitchenTicket.Status.IN_PROGRESS
+            ticket.save(update_fields=["status", "updated_at"])
+        return Response(KitchenTicketSerializer(ticket).data)
+
+
+class KitchenTicketClaimNextWithQueueApi(APIView):
+    permission_classes = [IsAuthenticated, IsOrgMemberReadOnlyOrOrgAdmin]
+
+    def post(self, request):
+        org = get_request_org(request)
+        claimed = None
+        with transaction.atomic():
+            claimed = (
+                KitchenTicket.objects
+                .select_for_update()
+                .filter(org=org, status=KitchenTicket.Status.PENDING)
+                .order_by("created_at", "id")
+                .select_related("order", "product")
+                .first()
+            )
+            if claimed:
+                claimed.status = KitchenTicket.Status.IN_PROGRESS
+                claimed.save(update_fields=["status", "updated_at"])
+
+        pending = (
+            KitchenTicket.objects
+            .filter(org=org, status=KitchenTicket.Status.PENDING)
+            .select_related("order", "product")
+            .order_by("created_at", "id")
+        )
+        in_progress = (
+            KitchenTicket.objects
+            .filter(org=org, status=KitchenTicket.Status.IN_PROGRESS)
+            .select_related("order", "product")
+            .order_by("created_at", "id")
+        )
+
+        payload = {
+            "claimed": KitchenTicketSerializer(claimed).data if claimed else None,
+            "pending": KitchenTicketSerializer(pending, many=True).data,
+            "in_progress": KitchenTicketSerializer(in_progress, many=True).data,
+        }
+        return Response(payload)

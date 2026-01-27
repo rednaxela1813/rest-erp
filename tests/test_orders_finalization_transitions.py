@@ -5,7 +5,7 @@ from decimal import Decimal
 pytestmark = pytest.mark.django_db
 
 
-def test_cannot_change_paid_order_back_to_draft(admin_client):
+def test_cannot_change_paid_order_back_to_draft(admin_client, payment_factory, capture_payment_api):
     client, user, org = admin_client
 
     from apps.orders.models import Order
@@ -32,11 +32,8 @@ def test_cannot_change_paid_order_back_to_draft(admin_client):
     assert r1.status_code == 201
 
     # set paid
-    r2 = client.patch(
-        f"/api/v1/orders/{order.public_id}/",
-        data={"status": Order.STATUS_PAID},
-        content_type="application/json",
-    )
+    payment = payment_factory(order=order, org=org, amount=Decimal("5.00"))
+    r2 = capture_payment_api(client, payment)
     assert r2.status_code == 200
 
     # try rollback to draft
@@ -71,7 +68,7 @@ def test_admin_can_cancel_draft_order(admin_client):
 
 
 
-def test_cannot_set_paid_after_cancelled(admin_client):
+def test_cannot_set_paid_after_cancelled(admin_client, payment_factory, capture_payment_api):
     client, user, org = admin_client
 
     from apps.orders.models import Order
@@ -106,11 +103,8 @@ def test_cannot_set_paid_after_cancelled(admin_client):
     assert r2.status_code == 200
 
     # try set paid after cancelled
-    r3 = client.patch(
-        f"/api/v1/orders/{order.public_id}/",
-        data={"status": Order.STATUS_PAID},
-        content_type="application/json",
-    )
+    payment = payment_factory(order=order, org=org, amount=Decimal("5.00"))
+    r3 = capture_payment_api(client, payment)
     assert r3.status_code == 400
 
     order.refresh_from_db()

@@ -4,7 +4,7 @@ from decimal import Decimal
 pytestmark = pytest.mark.django_db
 
 
-def test_paying_order_deducts_product_stock(admin_client):
+def test_paying_order_deducts_product_stock(admin_client, payment_factory, capture_payment_api):
     client, user, org = admin_client
 
     from apps.orders.models import Order
@@ -34,11 +34,8 @@ def test_paying_order_deducts_product_stock(admin_client):
     )
     assert r1.status_code == 201
 
-    r2 = client.patch(
-        f"/api/v1/orders/{order.public_id}/",
-        data={"status": Order.STATUS_PAID},
-        content_type="application/json",
-    )
+    payment = payment_factory(order=order, org=org, amount=Decimal("10.00"))
+    r2 = capture_payment_api(client, payment)
     assert r2.status_code == 200
 
     product.refresh_from_db()

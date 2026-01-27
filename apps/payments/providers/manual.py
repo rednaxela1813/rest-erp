@@ -1,0 +1,14 @@
+from __future__ import annotations
+
+from apps.payments.providers.base import BasePaymentProvider
+
+
+class ManualProvider(BasePaymentProvider):
+    def authorize(self, *, payment, timeout_s: int):
+        return {"ok": True, "provider": "manual", "action": "authorize"}
+
+    def capture(self, *, payment, timeout_s: int):
+        return {"ok": True, "provider": "manual", "action": "capture"}
+
+    def refund(self, *, payment, timeout_s: int):
+        return {"ok": True, "provider": "manual", "action": "refund"}

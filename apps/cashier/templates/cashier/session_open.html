@@ -1,0 +1,81 @@
+{% extends "cashier/base.html" %}
+
+{% block content %}
+<div class="pos-auth">
+  <div class="pos-auth-panel pos-auth-panel-wide">
+    <div class="pos-auth-brand">Burger Ops</div>
+    <div class="pos-auth-subtitle">Shift setup</div>
+    <div class="pos-auth-title">Open cashier session</div>
+    <div class="pos-auth-note">Organization is locked for the whole shift.</div>
+
+    {% if error %}
+      <div class="pos-alert">{{ error }}</div>
+    {% endif %}
+
+    <form method="post" class="pos-form pos-form-grid">
+      {% csrf_token %}
+      <label class="pos-field">
+        <span>Organization</span>
+        <select name="org_id" id="org-select" required>
+          <option value="">Select organization</option>
+          {% for org in orgs %}
+            <option value="{{ org.public_id }}" {% if org.public_id|stringformat:"s" == selected_org_id %}selected{% endif %}>
+              {{ org.name }}
+            </option>
+          {% endfor %}
+        </select>
+      </label>
+      {% if terminals %}
+        <label class="pos-field">
+          <span>Terminal</span>
+          <select name="terminal_id" id="terminal-select" required>
+            <option value="">Select terminal</option>
+            {% for terminal in terminals %}
+              <option value="{{ terminal.id }}" data-org="{{ terminal.org.public_id }}" {% if terminal.id|stringformat:"s" == selected_terminal_id %}selected{% endif %}>
+                {{ terminal.name }} · {{ terminal.org.name }}
+              </option>
+            {% endfor %}
+          </select>
+        </label>
+      {% else %}
+        <div class="pos-field">
+          <span>Terminal</span>
+          <div class="pos-muted">No terminals configured. A virtual terminal will be created.</div>
+        </div>
+      {% endif %}
+      <label class="pos-field">
+        <span>Opening cash</span>
+        <input type="number" step="0.01" min="0" name="opening_cash" value="{{ opening_cash_value|default:'0.00' }}">
+      </label>
+      <div class="pos-form-actions">
+        <button class="pos-btn pos-btn-primary" type="submit">Open shift</button>
+      </div>
+    </form>
+
+    <form method="post" action="{% url 'cashier:logout' %}" class="pos-form-footer">
+      {% csrf_token %}
+      <button class="pos-btn pos-btn-ghost" type="submit">Log out</button>
+    </form>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var orgSelect = document.getElementById("org-select");
+    var terminalSelect = document.getElementById("terminal-select");
+    if (!orgSelect || !terminalSelect) return;
+
+    function filterTerminals() {
+      var selectedOrg = orgSelect.value;
+      var options = terminalSelect.querySelectorAll("option[data-org]");
+      options.forEach(function (option) {
+        option.hidden = selectedOrg && option.dataset.org !== selectedOrg;
+      });
+      terminalSelect.value = "";
+    }
+
+    orgSelect.addEventListener("change", filterTerminals);
+    filterTerminals();
+  })();
+</script>
+{% endblock %}

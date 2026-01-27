@@ -3,7 +3,7 @@ from decimal import Decimal
 
 
 @pytest.mark.django_db
-def test_pay_order_rolls_back_stock_if_error_occurs_midway(admin_client, monkeypatch):
+def test_pay_order_rolls_back_stock_if_error_occurs_midway(admin_client, payment_factory, capture_payment_api, monkeypatch):
     """
     GIVEN:
         - Заказ draft с двумя разными продуктами
@@ -97,13 +97,9 @@ def test_pay_order_rolls_back_stock_if_error_occurs_midway(admin_client, monkeyp
     # ----------------------------------------
     # Django test client пробрасывает необработанные исключения наружу,
     # поэтому ожидаем RuntimeError вместо проверки HTTP-кода.
+    payment = payment_factory(order=order, org=org, amount=Decimal("5.00"))
     with pytest.raises(RuntimeError, match="DB write failed"):
-        client.patch(
-            f"/api/v1/orders/{order.public_id}/",
-            data={"status": "paid"},
-            content_type="application/json",
-            HTTP_X_ORG_ID=str(org.public_id),
-        )
+        capture_payment_api(client, payment)
 
     # ----------------------------------------
     # Assert: откат (rollback)

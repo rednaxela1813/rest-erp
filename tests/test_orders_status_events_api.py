@@ -3,7 +3,7 @@ from decimal import Decimal
 
 
 @pytest.mark.django_db
-def test_order_status_events_list_returns_events_for_order(admin_client):
+def test_order_status_events_list_returns_events_for_order(admin_client, payment_factory, capture_payment_api):
     client, user, org = admin_client
 
     from apps.orders.models import Order
@@ -41,12 +41,8 @@ def test_order_status_events_list_returns_events_for_order(admin_client):
     assert resp_item.status_code == 201, resp_item.content
 
     # оплатим заказ (должно создать статус-событие draft -> paid)
-    resp_pay = client.patch(
-        f"/api/v1/orders/{order.public_id}/",
-        data={"status": Order.STATUS_PAID},
-        content_type="application/json",
-        HTTP_X_ORG_ID=str(org.public_id),
-    )
+    payment = payment_factory(order=order, org=org, amount=Decimal("7.00"))
+    resp_pay = capture_payment_api(client, payment)
     assert resp_pay.status_code == 200, resp_pay.content
 
     # теперь читаем историю

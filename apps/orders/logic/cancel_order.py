@@ -34,15 +34,42 @@ def cancel_order(*, order: Order, actor=None) -> Order:
         if locked_order.status != Order.STATUS_PAID:
             raise ValidationError({"status": ["Only paid orders can be cancelled."]})
 
-        items_qs = locked_order.items.select_related("product").all()
+        items_qs = locked_order.items.select_related("product").prefetch_related(
+            "product__bundle_items__component"
+        )
         if not items_qs.exists():
             raise ValidationError({"order": "Cannot cancel order without items."})
 
         qty_by_product_id: dict[int, Decimal] = {}
+        kitchen_qty_by_product_id: dict[int, Decimal] = {}
         for item in items_qs:
-            pid = item.product_id
+            if not item.product_id:
+                continue
             item_qty = item.qty if isinstance(item.qty, Decimal) else Decimal(str(item.qty))
-            qty_by_product_id[pid] = qty_by_product_id.get(pid, Decimal("0")) + item_qty
+            product = item.product
+            if product and product.is_bundle:
+                for bundle_item in product.bundle_items.all():
+                    component = bundle_item.component
+                    if not component:
+                        continue
+                    component_qty = item_qty * bundle_item.qty
+                    if component.requires_preparation:
+                        kitchen_qty_by_product_id[component.id] = kitchen_qty_by_product_id.get(
+                            component.id, Decimal("0")
+                        ) + component_qty
+                    else:
+                        qty_by_product_id[component.id] = qty_by_product_id.get(
+                            component.id, Decimal("0")
+                        ) + component_qty
+            else:
+                if product.requires_preparation:
+                    kitchen_qty_by_product_id[product.id] = kitchen_qty_by_product_id.get(
+                        product.id, Decimal("0")
+                    ) + item_qty
+                else:
+                    qty_by_product_id[product.id] = qty_by_product_id.get(
+                        product.id, Decimal("0")
+                    ) + item_qty
 
         from apps.products.models import Product
 
@@ -53,6 +80,8 @@ def cancel_order(*, order: Order, actor=None) -> Order:
 
         for pid, total_qty in qty_by_product_id.items():
             p = products_map[pid]
+            if p.stock_qty is None:
+                continue
             p.stock_qty = p.stock_qty + total_qty
 
             fields = ["stock_qty"]
@@ -64,9 +93,13 @@ def cancel_order(*, order: Order, actor=None) -> Order:
         locked_order.status = Order.STATUS_CANCELLED
         locked_order.save(update_fields=["status", "updated_at"])
 
-        from apps.orders.models import OrderStatusEvent
+        from apps.orders.models import KitchenTicket, OrderStatusEvent
 
-        from apps.orders.models import OrderStatusEvent
+        if kitchen_qty_by_product_id:
+            KitchenTicket.objects.filter(
+                order=locked_order,
+                status__in=[KitchenTicket.Status.PENDING, KitchenTicket.Status.IN_PROGRESS],
+            ).update(status=KitchenTicket.Status.CANCELLED)
 
         OrderStatusEvent.objects.create(
             org=locked_order.org,

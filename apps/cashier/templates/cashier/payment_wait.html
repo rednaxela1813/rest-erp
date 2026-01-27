@@ -1,0 +1,50 @@
+{% extends "cashier/base.html" %}
+
+{% block content %}
+<div class="pos-shell pos-shell-narrow">
+  <header class="pos-header">
+    <div>
+      <div class="pos-brand">Burger Ops</div>
+      <div class="pos-subtitle">Payment processing</div>
+    </div>
+    <div class="pos-session-card">
+      <div class="pos-session-title">{{ org.name }}</div>
+      <div class="pos-session-meta">Terminal {{ session.terminal.name }}</div>
+      <div class="pos-session-meta">Order {{ order.public_id }}</div>
+    </div>
+  </header>
+
+  <section class="pos-panel pos-wait-card">
+    <div class="pos-wait-title">Waiting for payment signal</div>
+    <div class="pos-wait-subtitle">
+      Card payments are captured after terminal approval. Cash waits for drawer signal.
+    </div>
+
+    <div
+      id="payment-status"
+      hx-get="{% url 'cashier:payment_status' payment.public_id %}"
+      hx-trigger="load, every 2s"
+      hx-target="#payment-status"
+      hx-swap="innerHTML"
+    >
+      {% include "cashier/partials/payment_status.html" %}
+    </div>
+
+    {% if debug %}
+      <div class="pos-debug">
+        <div class="pos-debug-title">Debug controls</div>
+        <div class="pos-debug-actions">
+          <form method="post" action="{% url 'cashier:payment_confirm_card' payment.public_id %}">
+            {% csrf_token %}
+            <button class="pos-btn pos-btn-outline" type="submit">Simulate card approval</button>
+          </form>
+          <form method="post" action="{% url 'cashier:payment_confirm_cash' payment.public_id %}">
+            {% csrf_token %}
+            <button class="pos-btn pos-btn-outline" type="submit">Simulate cash received</button>
+          </form>
+        </div>
+      </div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

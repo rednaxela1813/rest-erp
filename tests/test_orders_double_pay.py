@@ -3,7 +3,7 @@ from decimal import Decimal
 
 
 @pytest.mark.django_db
-def test_order_cannot_be_paid_twice(admin_client):
+def test_order_cannot_be_paid_twice(admin_client, payment_factory, capture_payment_api):
     client, user, org = admin_client
 
     from apps.orders.models import Order
@@ -36,12 +36,8 @@ def test_order_cannot_be_paid_twice(admin_client):
     assert resp.status_code == 201
 
     # first pay -> OK
-    resp1 = client.patch(
-        f"/api/v1/orders/{order.public_id}/",
-        data={"status": "paid"},
-        content_type="application/json",
-        HTTP_X_ORG_ID=str(org.public_id),
-    )
+    payment1 = payment_factory(order=order, org=org, amount=Decimal("7.00"))
+    resp1 = capture_payment_api(client, payment1)
     assert resp1.status_code == 200
 
     product.refresh_from_db()
@@ -49,12 +45,8 @@ def test_order_cannot_be_paid_twice(admin_client):
     assert stock_after_first_pay == Decimal("8")  # 10 - 2
 
     # second pay -> must fail and NOT touch stock
-    resp2 = client.patch(
-        f"/api/v1/orders/{order.public_id}/",
-        data={"status": "paid"},
-        content_type="application/json",
-        HTTP_X_ORG_ID=str(org.public_id),
-    )
+    payment2 = payment_factory(order=order, org=org, amount=Decimal("7.00"))
+    resp2 = capture_payment_api(client, payment2)
     assert resp2.status_code == 400
     assert resp2.json() == {"status": ["Order is already paid."]}
 

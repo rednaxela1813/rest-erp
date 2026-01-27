@@ -1,0 +1,31 @@
+<div class="pos-status-grid">
+  <div class="pos-status-card">
+    <div class="pos-status-label">Order total</div>
+    <div class="pos-status-value">{{ order.total }} {{ currency }}</div>
+  </div>
+  <div class="pos-status-card">
+    <div class="pos-status-label">Payment status</div>
+    <div class="pos-status-value pos-status-pill">{{ payment.status }}</div>
+  </div>
+</div>
+
+{% if payment.status == "captured" %}
+  <div class="pos-success">
+    <div class="pos-success-title">Payment confirmed</div>
+    <div class="pos-success-subtitle">Receipts sent to printer and fiscal module.</div>
+    <a class="pos-btn pos-btn-primary" href="{% url 'cashier:home' %}">Start new sale</a>
+  </div>
+{% elif payment.status == "failed" %}
+  <div class="pos-alert">
+    <div class="pos-success-title">Payment failed</div>
+    <div class="pos-success-subtitle">{{ payment.failure_reason }}</div>
+  </div>
+{% else %}
+  <div class="pos-wait-indicator">
+    <div class="pos-spinner"></div>
+    <div>
+      <div class="pos-wait-label">Waiting for device signal</div>
+      <div class="pos-wait-note">Do not close this window until payment is confirmed.</div>
+    </div>
+  </div>
+{% endif %}

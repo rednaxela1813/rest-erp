@@ -39,7 +39,8 @@ class Order(OrgScopedModel):
     
     def recompute_totals(self) -> None:
         """
-        Minimal: totals = sum(qty * unit_price), tax_total = subtotal * (rate/100) per item, total = subtotal + tax_total
+        Prices are VAT-inclusive: subtotal = sum(qty * unit_price),
+        tax_total is extracted from the inclusive price, total = subtotal.
         """
         items = self.items.select_related("tax_rate").all()
 
@@ -49,12 +50,16 @@ class Order(OrgScopedModel):
         for it in items:
             line_base = (it.qty * it.unit_price)
             subtotal += line_base
-            tax_total += (line_base * it.tax_rate.rate / Decimal("100"))
+            rate = it.tax_rate.rate if it.tax_rate else Decimal("0.00")
+            if rate > 0:
+                divisor = Decimal("1.00") + (rate / Decimal("100"))
+                line_tax = (line_base - (line_base / divisor)).quantize(Decimal("0.01"))
+                tax_total += line_tax
 
         # normalize to 2 decimals
         self.subtotal = subtotal.quantize(Decimal("0.01"))
         self.tax_total = tax_total.quantize(Decimal("0.01"))
-        self.total = (self.subtotal + self.tax_total).quantize(Decimal("0.01"))
+        self.total = self.subtotal
         
         
     class Meta:
@@ -137,3 +142,24 @@ class OrderStatusEvent(models.Model):
     def __str__(self) -> str:
         return f"{self.order_id}: {self.from_status} -> {self.to_status}"
 
+
+class KitchenTicket(OrgScopedModel):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        IN_PROGRESS = "in_progress", "In progress"
+        DONE = "done", "Done"
+        CANCELLED = "cancelled", "Cancelled"
+
+    order = models.ForeignKey("orders.Order", on_delete=models.CASCADE, related_name="kitchen_tickets")
+    product = models.ForeignKey("products.Product", on_delete=models.PROTECT, related_name="kitchen_tickets")
+    qty = models.DecimalField(max_digits=12, decimal_places=3, default=Decimal("1.000"))
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["org", "status", "created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.order_id}: {self.product_id} x {self.qty}"

@@ -1,0 +1,71 @@
+{% extends "cashier/base.html" %}
+
+{% block content %}
+<div class="pos-shell">
+  <header class="pos-header">
+    <div>
+      <div class="pos-brand">Burger Ops</div>
+      <div class="pos-subtitle">Cashier console · shift is open</div>
+    </div>
+    <div class="pos-session-card">
+      <div class="pos-session-title">{{ org.name }}</div>
+      <div class="pos-session-meta">
+        Terminal {{ session.terminal.name }} · Cashier {{ request.user.email }}
+      </div>
+      <div class="pos-session-meta">
+        Opened {{ session.opened_at|date:"H:i" }}
+      </div>
+      <div class="pos-session-actions">
+        <a class="pos-btn pos-btn-outline" href="{% url 'cashier:kitchen_board' %}">Kitchen</a>
+      </div>
+      <form method="post" action="{% url 'cashier:logout' %}">
+        {% csrf_token %}
+        <button class="pos-btn pos-btn-ghost" type="submit">Log out</button>
+      </form>
+    </div>
+  </header>
+
+  <div class="pos-grid">
+    <section class="pos-panel pos-panel-products">
+      <div class="pos-panel-header">
+        <div>
+          <div class="pos-panel-title">Menu</div>
+          <div class="pos-panel-subtitle">Scan barcode or tap product</div>
+        </div>
+        <form class="pos-search">
+          <input
+            id="product-search"
+            name="q"
+            type="search"
+            placeholder="Search products"
+            hx-get="{% url 'cashier:product_list' %}"
+            hx-target="#product-list"
+            hx-trigger="keyup changed delay:250ms"
+            hx-include="#product-search"
+          >
+        </form>
+      </div>
+
+      <form
+        class="pos-barcode"
+        hx-post="{% url 'cashier:cart_add_barcode' %}"
+        hx-target="#cart-panel"
+        hx-swap="innerHTML"
+      >
+        <input name="barcode" type="text" placeholder="Barcode input" autocomplete="off">
+        <button class="pos-btn pos-btn-secondary" type="submit">Add</button>
+      </form>
+
+      <div id="product-list">
+        {% include "cashier/partials/product_list.html" %}
+      </div>
+    </section>
+
+    <section class="pos-panel pos-panel-cart">
+      <div id="cart-panel">
+        {% include "cashier/partials/cart.html" %}
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,1 @@
+"""Cashier UI app."""
