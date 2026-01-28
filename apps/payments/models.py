@@ -56,6 +56,16 @@ class OrderPayment(OrgScopedModel):
         CANCELLED = "cancelled", "Cancelled"
         FAILED = "failed", "Failed"
 
+    class CaptureStatus(models.TextChoices):
+        PENDING = "pending", "Pending"
+        TIMEOUT = "timeout", "Timeout"
+        CONFIRMED = "confirmed", "Confirmed"
+
+    class FiscalStatus(models.TextChoices):
+        PENDING = "pending", "Pending"
+        FAILED = "failed", "Failed"
+        CONFIRMED = "confirmed", "Confirmed"
+
     order = models.ForeignKey(
         "orders.Order",
         on_delete=models.PROTECT,
@@ -84,6 +94,21 @@ class OrderPayment(OrgScopedModel):
     captured_at = models.DateTimeField(null=True, blank=True)
     cancelled_at = models.DateTimeField(null=True, blank=True)
     failure_reason = models.CharField(max_length=255, blank=True, default="")
+
+    # Separate status trackers for outage-resilient capture and fiscalization.
+    # Null keeps existing data neutral until workflows are wired in.
+    capture_status = models.CharField(
+        max_length=16,
+        choices=CaptureStatus.choices,
+        null=True,
+        blank=True,
+    )
+    fiscal_status = models.CharField(
+        max_length=16,
+        choices=FiscalStatus.choices,
+        null=True,
+        blank=True,
+    )
 
     class Meta:
         ordering = ["-created_at"]
@@ -162,10 +187,10 @@ class FiscalReceipt(models.Model):
         null=True,
         blank=True,
     )
-    payment = models.OneToOneField(
+    payment = models.ForeignKey(
         "payments.OrderPayment",
         on_delete=models.PROTECT,
-        related_name="fiscal_receipt",
+        related_name="fiscal_receipts",
         null=True,
         blank=True,
     )
@@ -182,6 +207,89 @@ class FiscalReceipt(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        constraints = [
+            # Prevent duplicate receipts of the same type per payment.
+            models.UniqueConstraint(
+                fields=["payment", "receipt_type"],
+                condition=models.Q(payment__isnull=False),
+                name="uniq_fiscal_receipt_per_payment_type",
+            ),
+        ]
+
+
+class DeviceCommand(models.Model):
+    """
+    Outbox command for Local Agent / device adapters.
+
+    This model is intentionally generic:
+    - The server only enqueues commands and tracks delivery status.
+    - A separate Local Agent pulls commands and reports ACK/FAIL.
+    - The server never talks to USB/COM directly.
+    """
+
+    class Type(models.TextChoices):
+        FISCALIZE_SALE = "fiscalize_sale", "Fiscalize sale"
+        FISCALIZE_REFUND = "fiscalize_refund", "Fiscalize refund"
+        FISCALIZE_STORNO = "fiscalize_storno", "Fiscalize storno"
+        PRINT_KOT = "print_kot", "Print kitchen order ticket"
+        PRINT_RECEIPT = "print_receipt", "Print customer receipt"
+        PAYMENT_CAPTURE = "payment_capture", "Capture payment"
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        SENT = "sent", "Sent"
+        ACKED = "acked", "Acknowledged"
+        FAILED = "failed", "Failed"
+
+    public_id = models.UUIDField(editable=False, unique=True, default=uuid.uuid4)
+
+    org = models.ForeignKey(
+        "orgs.Organization",
+        on_delete=models.PROTECT,
+        related_name="device_commands",
+    )
+    order = models.ForeignKey(
+        "orders.Order",
+        on_delete=models.PROTECT,
+        related_name="device_commands",
+        null=True,
+        blank=True,
+    )
+    payment = models.ForeignKey(
+        "payments.OrderPayment",
+        on_delete=models.PROTECT,
+        related_name="device_commands",
+        null=True,
+        blank=True,
+    )
+
+    command_type = models.CharField(max_length=32, choices=Type.choices)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING)
+
+    # Payload is adapter-specific (e.g., fiscal SDK or printer driver).
+    # We store it here for retries and audit.
+    payload = models.JSONField(default=dict, blank=True)
+
+    # Idempotency is required for safe retries and repeated requests.
+    idempotency_key = models.CharField(max_length=128)
+
+    retries = models.PositiveIntegerField(default=0)
+    max_retries = models.PositiveIntegerField(default=5)
+    last_error = models.TextField(blank=True, default="")
+    # When set, workers should not retry this command before the timestamp.
+    next_attempt_at = models.DateTimeField(null=True, blank=True, db_index=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["org", "idempotency_key"],
+                name="uniq_device_command_idempotency_per_org",
+            ),
+        ]
 
 
 CASHIER_SESSION_STATUS_OPEN = "open"

@@ -13,5 +13,61 @@
   <body class="pos-body" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
     {% block content %}{% endblock %}
     <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <script>
+      (() => {
+        const parseAmount = (raw) => {
+          if (!raw) return 0;
+          const cleaned = String(raw).replace(",", ".");
+          const value = Number.parseFloat(cleaned);
+          return Number.isFinite(value) ? value : 0;
+        };
+
+        const formatAmount = (value) => {
+          const fixed = Number.isFinite(value) ? value : 0;
+          return fixed.toFixed(2);
+        };
+
+        const updateChange = (root) => {
+          if (!root) return;
+          const total = parseAmount(root.dataset.orderTotal);
+          const input = root.querySelector(".pos-cash-received");
+          const output = root.querySelector(".pos-cash-change-output");
+          if (!input || !output) return;
+
+          const received = parseAmount(input.value);
+          const change = Math.max(0, received - total);
+          output.value = formatAmount(change);
+
+          const shouldWarn = received > 0 && received < total;
+          root.classList.toggle("is-warning", shouldWarn);
+          root.classList.toggle("is-ready", received >= total && total > 0);
+        };
+
+        document.addEventListener("input", (event) => {
+          if (!event.target.classList.contains("pos-cash-received")) return;
+          updateChange(event.target.closest("[data-change-root]"));
+        });
+
+        document.addEventListener("click", (event) => {
+          const button = event.target.closest(".pos-cash-quick-btn");
+          if (!button) return;
+          const root = button.closest("[data-change-root]");
+          if (!root) return;
+          const input = root.querySelector(".pos-cash-received");
+          if (!input) return;
+          input.value = button.dataset.amount || "";
+          updateChange(root);
+        });
+
+        document.addEventListener("htmx:afterSwap", (event) => {
+          const root = event.target.querySelector?.("[data-change-root]");
+          if (root) updateChange(root);
+        });
+
+        document.addEventListener("DOMContentLoaded", () => {
+          document.querySelectorAll("[data-change-root]").forEach(updateChange);
+        });
+      })();
+    </script>
   </body>
 </html>

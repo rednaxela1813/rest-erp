@@ -16,6 +16,17 @@ services:
       timeout: 3s
       retries: 10
 
+  redis:
+    image: redis:7
+    container_name: auth_redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   web:
     build:
       context: .
@@ -40,6 +51,44 @@ services:
       interval: 10s
       timeout: 3s
       retries: 10
+
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: auth_celery_worker
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    command: >
+      sh -c "
+      celery -A core worker -l info -Q device_commands,default
+      "
+
+  celery_beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: auth_celery_beat
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    command: >
+      sh -c "
+      celery -A core beat -l info
+      "
 
 volumes:
   postgres_data:

@@ -10,3 +10,9 @@ class BasePaymentProvider:
 
     def refund(self, *, payment, timeout_s: int):
         raise NotImplementedError
+
+    def capture_status(self, *, payment, timeout_s: int):
+        """
+        Optional reconciliation hook for offline capture workflows.
+        """
+        raise NotImplementedError

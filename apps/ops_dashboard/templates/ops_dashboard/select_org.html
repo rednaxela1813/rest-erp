@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Select Organization</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+      :root {
+        --bg: #f6f4ef;
+        --card: #ffffff;
+        --ink: #1a1a1a;
+        --muted: #6f6f6f;
+        --accent: #e46c3a;
+        --line: #e6e0d8;
+      }
+      body {
+        margin: 0;
+        font-family: "Georgia", "Times New Roman", serif;
+        background: radial-gradient(circle at 10% 10%, #fff6e8, #f6f4ef 45%, #efe7dc);
+        color: var(--ink);
+      }
+      .wrap {
+        max-width: 760px;
+        margin: 60px auto;
+        padding: 0 20px 40px;
+      }
+      h1 {
+        margin: 0 0 12px;
+        font-size: 28px;
+      }
+      .hint {
+        color: var(--muted);
+        margin-bottom: 24px;
+      }
+      .org-list {
+        display: grid;
+        gap: 12px;
+      }
+      .org-card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        text-decoration: none;
+        color: inherit;
+        transition: transform 0.12s ease, box-shadow 0.12s ease;
+      }
+      .org-card:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 8px 18px rgba(0, 0, 0, 0.08);
+      }
+      .org-name {
+        font-size: 16px;
+        font-weight: 600;
+      }
+      .go {
+        background: var(--accent);
+        color: white;
+        padding: 6px 12px;
+        border-radius: 999px;
+        font-size: 12px;
+        letter-spacing: 0.4px;
+      }
+      .empty {
+        background: var(--card);
+        border: 1px dashed var(--line);
+        border-radius: 16px;
+        padding: 18px;
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Выберите организацию</h1>
+      <div class="hint">Доступны только org, где вы админ или владелец.</div>
+
+      <div class="org-list">
+        {% if orgs %}
+          {% for org in orgs %}
+            <a class="org-card" href="/dashboard/?org={{ org.public_id }}">
+              <span class="org-name">{{ org.name }}</span>
+              <span class="go">Open</span>
+            </a>
+          {% endfor %}
+        {% else %}
+          <div class="empty">Нет организаций с правами admin/owner.</div>
+        {% endif %}
+      </div>
+    </div>
+  </body>
+</html>

@@ -15,6 +15,8 @@ from config.orgs.permissions import IsOrgMemberReadOnlyOrOrgAdmin
 
 from .logic.cancel_draft_order import cancel_draft_order
 from .logic.cancel_order import cancel_order
+from .logic.refund_order import refund_paid_order
+from .logic.storno_order import storno_paid_order
 from .models import KitchenTicket, Order, OrderItem, OrderStatusEvent
 from .serializers import (
     KitchenTicketSerializer,
@@ -144,6 +146,64 @@ class OrderStatusEventListApi(generics.ListAPIView):
             .filter(org=org, order=order)
             .select_related("actor", "order")
             .order_by("-created_at", "-id")
+        )
+
+
+class OrderRefundApi(APIView):
+    """
+    Refund a paid order.
+
+    This endpoint is intentionally narrow:
+    - Requires org admin/owner (manager role in MVP)
+    - Cancels the order (paid -> cancelled)
+    - Creates fiscal receipt (refund) and enqueues device commands
+    """
+
+    permission_classes = [IsAuthenticated, IsOrgMemberReadOnlyOrOrgAdmin]
+
+    def post(self, request, public_id):
+        org = get_request_org(request)
+        order = get_object_or_404(Order, org=org, public_id=public_id)
+
+        receipt = refund_paid_order(order=order, actor=request.user)
+        order.refresh_from_db()
+
+        return Response(
+            {
+                "order": str(order.public_id),
+                "order_status": order.status,
+                "receipt": str(receipt.public_id),
+                "receipt_type": receipt.receipt_type,
+            }
+        )
+
+
+class OrderStornoApi(APIView):
+    """
+    Storno a paid order.
+
+    This endpoint is intentionally narrow:
+    - Requires org admin/owner (manager role in MVP)
+    - Cancels the order (paid -> cancelled)
+    - Creates fiscal receipt (storno) and enqueues device commands
+    """
+
+    permission_classes = [IsAuthenticated, IsOrgMemberReadOnlyOrOrgAdmin]
+
+    def post(self, request, public_id):
+        org = get_request_org(request)
+        order = get_object_or_404(Order, org=org, public_id=public_id)
+
+        receipt = storno_paid_order(order=order, actor=request.user)
+        order.refresh_from_db()
+
+        return Response(
+            {
+                "order": str(order.public_id),
+                "order_status": order.status,
+                "receipt": str(receipt.public_id),
+                "receipt_type": receipt.receipt_type,
+            }
         )
 
 

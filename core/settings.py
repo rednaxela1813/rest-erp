@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     "apps.orders",
     "apps.payments",
     "apps.cashier",
+    "apps.ops_dashboard",
 
 ]
 
@@ -143,6 +144,39 @@ TIME_ZONE = 'UTC'
 USE_I18N = True
 
 USE_TZ = True
+
+# Celery + Redis (async task processing + device command streaming).
+CELERY_BROKER_URL = config("CELERY_BROKER_URL", default="redis://redis:6379/0")
+CELERY_RESULT_BACKEND = config("CELERY_RESULT_BACKEND", default="redis://redis:6379/1")
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+# Keep device streaming in a dedicated queue so workers can be scaled independently.
+CELERY_TASK_ROUTES = {
+    "apps.payments.tasks.dispatch_device_commands": {"queue": "device_commands"},
+    "apps.payments.tasks.dispatch_device_commands_for_all_orgs": {"queue": "device_commands"},
+}
+
+CELERY_BEAT_SCHEDULE = {
+    "dispatch-device-commands-all-orgs": {
+        "task": "apps.payments.tasks.dispatch_device_commands_for_all_orgs",
+        "schedule": 60.0,
+        "kwargs": {"limit": 50},
+    },
+}
+
+# Redis stream settings for device command delivery.
+DEVICE_COMMANDS_REDIS_URL = config("DEVICE_COMMANDS_REDIS_URL", default=CELERY_BROKER_URL)
+DEVICE_COMMANDS_STREAM = config("DEVICE_COMMANDS_STREAM", default="device_commands")
+DEVICE_COMMANDS_STREAM_MAXLEN = config("DEVICE_COMMANDS_STREAM_MAXLEN", cast=int, default=10000)
+DEVICE_COMMANDS_RETRY_BASE_SECONDS = config(
+    "DEVICE_COMMANDS_RETRY_BASE_SECONDS", cast=int, default=10
+)
+DEVICE_COMMANDS_RETRY_MAX_SECONDS = config(
+    "DEVICE_COMMANDS_RETRY_MAX_SECONDS", cast=int, default=300
+)
 
 
 # Static files (CSS, JavaScript, Images)

@@ -12,3 +12,13 @@ class ManualProvider(BasePaymentProvider):
 
     def refund(self, *, payment, timeout_s: int):
         return {"ok": True, "provider": "manual", "action": "refund"}
+
+    def capture_status(self, *, payment, timeout_s: int):
+        """
+        Manual provider treats captured payments as confirmed.
+        """
+        if payment.status == payment.Status.CAPTURED:
+            return {"status": "confirmed"}
+        if payment.status == payment.Status.FAILED:
+            return {"status": "failed"}
+        return {"status": "pending"}

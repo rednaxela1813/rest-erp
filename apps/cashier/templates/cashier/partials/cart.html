@@ -93,6 +93,41 @@
       </button>
     </form>
 
+    <div
+      class="pos-cash-in pos-cash-change"
+      data-change-root
+      data-order-total="{{ totals.total }}"
+      data-currency="{{ currency }}"
+    >
+      <div class="pos-cash-in-title">Change calculator</div>
+      <div class="pos-cash-in-row pos-cash-change-row">
+        <input
+          type="number"
+          step="0.01"
+          min="0"
+          inputmode="decimal"
+          class="pos-cash-received"
+          placeholder="Received from customer"
+        >
+        <div class="pos-cash-change-output-wrap">
+          <input
+            type="text"
+            class="pos-cash-change-output"
+            placeholder="Change"
+            readonly
+          >
+          <span class="pos-cash-addon">{{ currency }}</span>
+        </div>
+      </div>
+      <div class="pos-cash-quick">
+        <button type="button" class="pos-btn pos-btn-outline pos-cash-quick-btn" data-amount="10">10</button>
+        <button type="button" class="pos-btn pos-btn-outline pos-cash-quick-btn" data-amount="20">20</button>
+        <button type="button" class="pos-btn pos-btn-outline pos-cash-quick-btn" data-amount="50">50</button>
+        <button type="button" class="pos-btn pos-btn-outline pos-cash-quick-btn" data-amount="100">100</button>
+      </div>
+      <div class="pos-cash-change-warning">Received amount is below total.</div>
+    </div>
+
     <form class="pos-cash-in" method="post" action="{% url 'cashier:cash_in' %}">
       {% csrf_token %}
       <div class="pos-cash-in-title">Cash in (change)</div>

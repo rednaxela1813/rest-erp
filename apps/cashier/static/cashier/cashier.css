@@ -313,6 +313,14 @@ a {
   gap: 0.8rem;
 }
 
+.pos-cash-change {
+  background: rgba(16, 20, 24, 0.04);
+  padding: 1rem;
+  border-radius: 16px;
+  display: grid;
+  gap: 0.8rem;
+}
+
 .pos-cash-in-title {
   font-weight: 600;
   font-size: 0.9rem;
@@ -322,6 +330,58 @@ a {
   display: grid;
   grid-template-columns: 1fr 1fr auto;
   gap: 0.6rem;
+}
+
+.pos-cash-change-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+}
+
+.pos-cash-change-output-wrap {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.pos-cash-addon {
+  font-family: "Space Mono", monospace;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.pos-cash-change-warning {
+  display: none;
+  font-size: 0.85rem;
+  color: #a14a2c;
+}
+
+.pos-cash-change.is-warning .pos-cash-change-warning {
+  display: block;
+}
+
+.pos-cash-change.is-ready .pos-cash-change-output {
+  border-color: rgba(18, 194, 160, 0.6);
+  box-shadow: 0 0 0 3px rgba(18, 194, 160, 0.18);
+  color: var(--ink);
+}
+
+.pos-cash-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.pos-cash-quick-btn {
+  padding: 0.45rem 0.9rem;
+  font-size: 0.85rem;
+}
+
+.pos-cash-change.is-warning .pos-cash-received,
+.pos-cash-change.is-warning .pos-cash-change-output {
+  border-color: rgba(255, 106, 61, 0.6);
+  box-shadow: 0 0 0 3px rgba(255, 106, 61, 0.15);
 }
 
 .pos-cash-in-row .pos-btn {

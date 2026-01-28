@@ -26,7 +26,17 @@ class PaymentProviderConfigAdmin(admin.ModelAdmin):
 
 @admin.register(OrderPayment)
 class OrderPaymentAdmin(admin.ModelAdmin):
-    list_display = ("public_id", "order", "tender", "status", "amount", "currency", "provider")
+    list_display = (
+        "public_id",
+        "order",
+        "tender",
+        "status",
+        "capture_status",
+        "fiscal_status",
+        "amount",
+        "currency",
+        "provider",
+    )
     list_filter = ("status", "tender", "provider")
     search_fields = ("public_id", "order__public_id")
     readonly_fields = (
@@ -34,6 +44,40 @@ class OrderPaymentAdmin(admin.ModelAdmin):
         "captured_at",
         "cancelled_at",
     )
+    actions = (
+        "mark_capture_confirmed",
+        "mark_capture_timeout",
+        "mark_fiscal_confirmed",
+        "mark_fiscal_failed",
+    )
+
+    def mark_capture_confirmed(self, request, queryset):
+        """
+        Admin override for confirmed bank capture.
+        """
+        updated = queryset.update(capture_status=OrderPayment.CaptureStatus.CONFIRMED)
+        self.message_user(request, f"Updated capture_status=confirmed for {updated} payments.")
+
+    def mark_capture_timeout(self, request, queryset):
+        """
+        Admin override for capture timeout after an outage.
+        """
+        updated = queryset.update(capture_status=OrderPayment.CaptureStatus.TIMEOUT)
+        self.message_user(request, f"Updated capture_status=timeout for {updated} payments.")
+
+    def mark_fiscal_confirmed(self, request, queryset):
+        """
+        Admin override for successful fiscalization.
+        """
+        updated = queryset.update(fiscal_status=OrderPayment.FiscalStatus.CONFIRMED)
+        self.message_user(request, f"Updated fiscal_status=confirmed for {updated} payments.")
+
+    def mark_fiscal_failed(self, request, queryset):
+        """
+        Admin override for fiscalization failure.
+        """
+        updated = queryset.update(fiscal_status=OrderPayment.FiscalStatus.FAILED)
+        self.message_user(request, f"Updated fiscal_status=failed for {updated} payments.")
 
 
 @admin.register(PaymentEvent)

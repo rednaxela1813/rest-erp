@@ -1,0 +1,35 @@
+<div class="grid" id="dashboard-metrics">
+  <div class="card">
+    <h3>Unsent fiscal receipts</h3>
+    <div class="metric">{{ metrics.fiscal_unsent_total }}</div>
+    <div class="meta">
+      Pending: {{ metrics.fiscal_status_counts.pending }},
+      Sent: {{ metrics.fiscal_status_counts.sent }},
+      Failed: {{ metrics.fiscal_status_counts.failed }}
+    </div>
+    <div class="meta">
+      Oldest: {{ metrics.fiscal_oldest_created_at|default:"—" }}
+    </div>
+  </div>
+  <div class="card">
+    <h3>Payments</h3>
+    <div class="metric">{{ metrics.payment_counts.capture_timeout }}</div>
+    <div class="meta">Capture timeouts</div>
+    <div class="meta">Capture pending: {{ metrics.payment_counts.capture_pending }}</div>
+    <div class="meta">Fiscal pending: {{ metrics.payment_counts.fiscal_pending }}</div>
+    <div class="meta">Fiscal failed: {{ metrics.payment_counts.fiscal_failed }}</div>
+  </div>
+  <div class="card">
+    <h3>Orders</h3>
+    <div class="metric">{{ metrics.order_counts.paid }}</div>
+    <div class="meta">
+      Draft: {{ metrics.order_counts.draft }},
+      Cancelled: {{ metrics.order_counts.cancelled }}
+    </div>
+  </div>
+  <div class="card">
+    <h3>Open shifts</h3>
+    <div class="metric">{{ metrics.open_sessions }}</div>
+    <div class="meta">Active cashier sessions</div>
+  </div>
+</div>

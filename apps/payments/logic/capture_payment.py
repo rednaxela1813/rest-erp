@@ -4,6 +4,7 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
+from apps.payments.logic.enqueue_device_commands import enqueue_payment_commands
 from apps.payments.models import FiscalReceipt, OrderPayment
 from apps.payments.providers import registry
 from apps.orders.logic.finalize_paid_order import finalize_paid_order
@@ -27,15 +28,20 @@ def capture_payment(*, payment: OrderPayment, actor=None, timeout_s: int = 30) -
         if payment.tender == OrderPayment.Tender.CARD:
             FiscalReceipt.objects.get_or_create(
                 payment=payment,
+                receipt_type=FiscalReceipt.Type.SALE,
                 defaults={
                     "org": payment.org,
                     "order": payment.order,
-                    "receipt_type": FiscalReceipt.Type.SALE,
                     "total": payment.amount,
                     "tax_total": payment.order.tax_total,
                     "currency": payment.currency,
                     "raw_payload": payment.raw_provider_payload,
                 },
             )
+
+        # Enqueue device commands for local agent processing.
+        # KOT is only needed if the order produced kitchen tickets.
+        include_kot = payment.order.kitchen_tickets.exists()
+        enqueue_payment_commands(payment=payment, include_kot=include_kot)
 
     return payment

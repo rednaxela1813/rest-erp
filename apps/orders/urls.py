@@ -5,6 +5,8 @@ from .api_views import (
     OrderDetailApi,
     OrderItemListCreateApi,
     OrderStatusEventListApi,
+    OrderRefundApi,
+    OrderStornoApi,
     KitchenTicketClaimNextApi,
     KitchenTicketClaimNextWithQueueApi,
     KitchenTicketListApi,
@@ -16,6 +18,8 @@ urlpatterns = [
     path("orders/<uuid:public_id>/", OrderDetailApi.as_view(), name="orders-detail"),  # <-- ВАЖНО
     path("orders/<uuid:order_public_id>/items/", OrderItemListCreateApi.as_view(), name="order-items"),
     path("orders/<uuid:public_id>/status-events/", OrderStatusEventListApi.as_view()),
+    path("orders/<uuid:public_id>/refund/", OrderRefundApi.as_view(), name="orders-refund"),
+    path("orders/<uuid:public_id>/storno/", OrderStornoApi.as_view(), name="orders-storno"),
     path("kitchen/tickets/", KitchenTicketListApi.as_view(), name="kitchen-tickets"),
     path("kitchen/tickets/next/", KitchenTicketClaimNextApi.as_view(), name="kitchen-tickets-next"),
     path("kitchen/tickets/next-with-queue/", KitchenTicketClaimNextWithQueueApi.as_view(), name="kitchen-tickets-next-with-queue"),

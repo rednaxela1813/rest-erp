@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Operations Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <style>
+      :root {
+        --bg: #f6f4ef;
+        --card: #ffffff;
+        --ink: #1a1a1a;
+        --muted: #6f6f6f;
+        --accent: #e46c3a;
+        --line: #e6e0d8;
+      }
+      body {
+        margin: 0;
+        font-family: "Georgia", "Times New Roman", serif;
+        background: radial-gradient(circle at 10% 10%, #fff6e8, #f6f4ef 45%, #efe7dc);
+        color: var(--ink);
+      }
+      .wrap {
+        max-width: 1100px;
+        margin: 40px auto;
+        padding: 0 20px 40px;
+      }
+      header {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      h1 {
+        font-size: 32px;
+        margin: 0;
+        letter-spacing: 0.3px;
+      }
+      .org {
+        color: var(--muted);
+        font-size: 14px;
+      }
+      .grid {
+        display: grid;
+        gap: 16px;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        margin-top: 24px;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 16px;
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.05);
+      }
+      .card h3 {
+        margin: 0 0 8px;
+        font-size: 14px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: var(--muted);
+      }
+      .metric {
+        font-size: 28px;
+        font-weight: bold;
+      }
+      .meta {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .badge {
+        display: inline-block;
+        background: var(--accent);
+        color: white;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 12px;
+        letter-spacing: 0.5px;
+      }
+      .footer {
+        margin-top: 24px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <h1>Operations Dashboard</h1>
+        <div class="org">Org: {{ org.name }}</div>
+      </header>
+
+      <div
+        id="dashboard-metrics"
+        hx-get="/dashboard/metrics/?org={{ org.public_id }}"
+        hx-trigger="load, every 10s"
+        hx-swap="outerHTML"
+      >
+        {% include "ops_dashboard/partials/metrics.html" %}
+      </div>
+
+      <div class="footer">
+        <span class="badge">Auto refresh</span> every 10 seconds
+      </div>
+    </div>
+  </body>
+</html>

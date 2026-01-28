@@ -160,6 +160,23 @@ apps/orders/
 
 * ✔️ `FiscalReceipt` создаётся после успешной оплаты картой (capture)
 * ✔️ Хранит `uid`, `raw_payload`, `total`, `tax_total`
+* ✔️ Возврат создаёт `FiscalReceipt` типа `refund` и ставит заказ в `cancelled`
+* ✔️ API: `POST /api/v1/orders/{id}/refund/`
+* ✔️ Storno создаёт `FiscalReceipt` типа `storno` и ставит заказ в `cancelled`
+* ✔️ API: `POST /api/v1/orders/{id}/storno/`
+
+### Outbox / Device Commands
+
+* ✔️ Команды устройства хранятся в `DeviceCommand`
+* ✔️ Идемпотентность через `idempotency_key`
+* ✔️ Команды для Local Agent: `payment_capture`, `fiscalize_sale`, `fiscalize_refund`, `fiscalize_storno`, `print_receipt`, `print_kot`
+* ✔️ API: `GET /api/v1/device/commands/pull/`, `POST /api/v1/device/commands/{id}/ack/`
+
+### Смена и отчёт
+
+* ✔️ Открытие смены: `POST /api/v1/shifts/open/`
+* ✔️ Закрытие смены: `POST /api/v1/shifts/{id}/close/`
+* ✔️ Отчёт по оплатам/DPH: `GET /api/v1/shifts/{id}/report/`
 
 ### Отмена
 
@@ -252,6 +269,13 @@ API:
 
    * Celery / background jobs
    * защита от таймаутов POS
+   * offline-статусы платежа (capture/fiscal)
+   * retry-очередь для device-команд
+   * backoff-ретраи по next_attempt_at
+   * reconcile задачи для capture/fiscal
+   * API для status/ручного resolution
+   * admin action для ручного override
+   * автоматическая отправка device-команд (Celery beat)
 
 ---
 
@@ -279,6 +303,26 @@ API:
 * быть пригодным для денег и склада.
 
 Это **не учебный пример**, а фундамент для коммерческого продукта.
+
+---
+
+## 📎 Операционные гайды
+
+- `../OPERATIONS_GUIDE.md` — полный гайд по offline‑сценариям, reconcile и ручному override
+- `../CASHIER_GUIDE.md` — краткая инструкция для кассира
+
+---
+
+## 🩺 Health endpoints
+
+- `GET /api/v1/health/fiscal-receipts/` — счетчик неотправленных фискальных чеков
+
+---
+
+## 📊 Ops dashboard
+
+- `GET /dashboard/` — HTML dashboard (admin/owner only). Без org редиректит на выбор организации.
+- `GET /dashboard/?org=<public_id>` — прямой вход в org.
 
 ---
 
