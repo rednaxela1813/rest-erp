@@ -157,6 +157,8 @@ CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 CELERY_TASK_ROUTES = {
     "apps.payments.tasks.dispatch_device_commands": {"queue": "device_commands"},
     "apps.payments.tasks.dispatch_device_commands_for_all_orgs": {"queue": "device_commands"},
+    "apps.payments.tasks.process_device_commands_mock": {"queue": "device_commands"},
+    "apps.payments.tasks.process_device_commands_mock_for_all_orgs": {"queue": "device_commands"},
 }
 
 CELERY_BEAT_SCHEDULE = {
@@ -177,6 +179,17 @@ DEVICE_COMMANDS_RETRY_BASE_SECONDS = config(
 DEVICE_COMMANDS_RETRY_MAX_SECONDS = config(
     "DEVICE_COMMANDS_RETRY_MAX_SECONDS", cast=int, default=300
 )
+
+# Mock fiscal agent (dev/staging).
+FISCAL_MOCK_ENABLED = config("FISCAL_MOCK_ENABLED", cast=bool, default=False)
+FISCAL_MOCK_OFFLINE = config("FISCAL_MOCK_OFFLINE", cast=bool, default=False)
+
+if FISCAL_MOCK_ENABLED:
+    CELERY_BEAT_SCHEDULE["mock-device-commands-all-orgs"] = {
+        "task": "apps.payments.tasks.process_device_commands_mock_for_all_orgs",
+        "schedule": 5.0,
+        "kwargs": {"limit": 50},
+    }
 
 
 # Static files (CSS, JavaScript, Images)

@@ -1,4 +1,5 @@
 #apps/products/models.py
+import uuid
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
@@ -156,3 +157,75 @@ class BundleItem(models.Model):
 
     def __str__(self) -> str:
         return f"{self.bundle.name}: {self.component.name} x {self.qty}"
+
+
+# ProductVariant (name, sku, barcode, unit_price, status, product FK)
+class ProductVariant(models.Model):
+    public_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    STATUS_ACTIVE = "active"
+    STATUS_ARCHIVED = "archived"
+    STATUS_CHOICES = (
+        (STATUS_ACTIVE, "Active"),
+        (STATUS_ARCHIVED, "Archived"),
+    )
+    
+    
+
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="variants")
+    name = models.CharField(max_length=64)
+    sku = models.CharField(max_length=64, blank=True, default="", db_index=True)
+    barcode = models.CharField(max_length=64, blank=True, default="", db_index=True)
+    unit_price = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_ACTIVE)
+
+    class Meta:
+        ordering = ["id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["product", "name"],
+                condition=models.Q(status="active"),
+                name="uniq_active_variant_name_per_product",
+            ),
+            models.UniqueConstraint(
+                fields=["product", "sku"],
+                condition=models.Q(sku__gt=""),
+                name="uniq_variant_sku_per_product",
+            ),
+            models.UniqueConstraint(
+                fields=["product", "barcode"],
+                condition=models.Q(barcode__gt=""),
+                name="uniq_variant_barcode_per_product",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.product.name} - {self.name}"
+    
+    
+# ProductAddon (name, price, status, product FK)
+class ProductAddon(models.Model):
+    public_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    STATUS_ACTIVE = "active"
+    STATUS_ARCHIVED = "archived"
+    STATUS_CHOICES = (
+        (STATUS_ACTIVE, "Active"),
+        (STATUS_ARCHIVED, "Archived"),
+    )
+
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="addons")
+    name = models.CharField(max_length=128)
+    price = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_ACTIVE)
+
+    class Meta:
+        ordering = ["id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["product", "name"],
+                condition=models.Q(status="active"),
+                name="uniq_active_addon_name_per_product",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.product.name} - {self.name}"

@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation
+import uuid
 from typing import Dict, List
 
 from django.conf import settings
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -27,6 +28,7 @@ from .integrations import send_fiscal_receipt, send_receipt_to_printer
 SESSION_ORG_ID = "cashier_org_id"
 SESSION_SESSION_ID = "cashier_session_id"
 SESSION_CART = "cashier_cart"
+SESSION_CHECKOUT_IDEMPOTENCY = "cashier_checkout_idempotency"
 
 
 def _parse_amount(raw_value: str) -> Decimal:
@@ -72,6 +74,17 @@ def _get_cart(session) -> Dict[str, int]:
         cart = {}
         session[SESSION_CART] = cart
     return cart
+
+
+def _reset_checkout_idempotency(session) -> None:
+    session.pop(SESSION_CHECKOUT_IDEMPOTENCY, None)
+
+
+def _cart_fingerprint(*, cart: Dict[str, int], tender: str) -> str:
+    if not cart:
+        return ""
+    items = [f"{product_id}:{qty}" for product_id, qty in sorted(cart.items())]
+    return f"{tender}|" + "|".join(items)
 
 
 def _get_products(org: Organization | None, query: str = ""):
@@ -182,7 +195,13 @@ def _kitchen_context(org: Organization) -> dict:
     }
 
 
-def _create_payment(*, order: Order, session: CashierSession, tender: str) -> OrderPayment:
+def _create_payment(
+    *,
+    order: Order,
+    session: CashierSession,
+    tender: str,
+    idempotency_key: str | None = None,
+) -> OrderPayment:
     payment = OrderPayment.objects.create(
         org=order.org,
         order=order,
@@ -192,6 +211,7 @@ def _create_payment(*, order: Order, session: CashierSession, tender: str) -> Or
         amount=order.total,
         currency=settings.DEFAULT_CURRENCY,
         provider="manual",
+        idempotency_key=idempotency_key,
     )
     return payment
 
@@ -469,6 +489,7 @@ def cart_add(request: HttpRequest, product_id: int) -> HttpResponse:
     cart = _get_cart(request.session)
     key = str(product.id)
     cart[key] = cart.get(key, 0) + 1
+    _reset_checkout_idempotency(request.session)
     request.session.modified = True
 
     items = _cart_items(cart, session.org)
@@ -503,6 +524,7 @@ def cart_add_barcode(request: HttpRequest) -> HttpResponse:
     else:
         key = str(product.id)
         cart[key] = cart.get(key, 0) + 1
+        _reset_checkout_idempotency(request.session)
         request.session.modified = True
 
     items = _cart_items(cart, session.org)
@@ -534,6 +556,7 @@ def cart_remove(request: HttpRequest, product_id: int) -> HttpResponse:
             cart.pop(key, None)
         else:
             cart[key] = new_qty
+        _reset_checkout_idempotency(request.session)
         request.session.modified = True
 
     items = _cart_items(cart, session.org)
@@ -557,6 +580,7 @@ def cart_clear(request: HttpRequest) -> HttpResponse:
 
     cart = _get_cart(request.session)
     cart.clear()
+    _reset_checkout_idempotency(request.session)
     request.session.modified = True
     context = {
         "org": session.org,
@@ -657,12 +681,43 @@ def checkout(request: HttpRequest) -> HttpResponse:
     if tender not in (OrderPayment.Tender.CASH, OrderPayment.Tender.CARD):
         return redirect("cashier:home")
 
+    fingerprint = _cart_fingerprint(cart=cart, tender=tender)
+    idem_map = request.session.get(SESSION_CHECKOUT_IDEMPOTENCY)
+    if not isinstance(idem_map, dict):
+        idem_map = {}
+        request.session[SESSION_CHECKOUT_IDEMPOTENCY] = idem_map
+
+    idempotency_key = idem_map.get(fingerprint)
+    if idempotency_key:
+        existing = OrderPayment.objects.filter(
+            org=session.org, idempotency_key=idempotency_key
+        ).first()
+        if existing:
+            return redirect("cashier:payment_wait", public_id=existing.public_id)
+    else:
+        idempotency_key = uuid.uuid4().hex
+        idem_map[fingerprint] = idempotency_key
+        request.session.modified = True
+
     try:
         order = _build_order_from_cart(org=session.org, cart_items=items)
     except ValueError:
         return redirect("cashier:home")
 
-    payment = _create_payment(order=order, session=session, tender=tender)
+    try:
+        payment = _create_payment(
+            order=order,
+            session=session,
+            tender=tender,
+            idempotency_key=idempotency_key,
+        )
+    except IntegrityError:
+        existing = OrderPayment.objects.filter(
+            org=session.org, idempotency_key=idempotency_key
+        ).first()
+        if existing:
+            return redirect("cashier:payment_wait", public_id=existing.public_id)
+        raise
 
     cart.clear()
     request.session.modified = True

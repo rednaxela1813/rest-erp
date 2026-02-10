@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 from celery import shared_task
+from django.conf import settings
 
 from config.orgs.models import Organization
 from django.db.models import F
 
-from apps.payments.logic.device_commands import pull_device_commands, release_due_device_commands
+from apps.payments.logic.device_commands import (
+    ack_device_command,
+    pull_device_commands,
+    release_due_device_commands,
+)
 from apps.payments.streaming import publish_device_commands
-from apps.payments.models import DeviceCommand, OrderPayment
+from apps.payments.models import DeviceCommand, FiscalReceipt, OrderPayment
 from apps.payments.providers import registry
 
 
@@ -35,6 +40,128 @@ def dispatch_device_commands(self, org_id: int, limit: int = 50) -> dict:
     }
 
 
+def _validate_mock_fiscal_payload(*, command: DeviceCommand) -> tuple[bool, str]:
+    payload = command.payload or {}
+
+    required_fields = ["order_id", "payment_id", "amount", "currency"]
+    missing = [field for field in required_fields if not payload.get(field)]
+    if missing:
+        return False, f"validation_error: missing_fields={','.join(missing)}"
+
+    if command.command_type in {
+        DeviceCommand.Type.FISCALIZE_REFUND,
+        DeviceCommand.Type.FISCALIZE_STORNO,
+    } and not payload.get("receipt_id"):
+        return False, "validation_error: missing_receipt_id"
+
+    items = payload.get("items")
+    if items is not None:
+        if not isinstance(items, list):
+            return False, "validation_error: items_not_list"
+        for index, item in enumerate(items):
+            if not isinstance(item, dict):
+                return False, f"validation_error: item_{index}_not_object"
+            for field in ["name", "qty", "unit_price", "tax_rate"]:
+                if field not in item:
+                    return False, f"validation_error: item_{index}_missing_{field}"
+
+    return True, ""
+
+
+def _hard_fail_command(*, command: DeviceCommand, error: str) -> None:
+    command.status = DeviceCommand.Status.FAILED
+    command.last_error = error
+    command.retries = command.max_retries
+    command.next_attempt_at = None
+    command.save(
+        update_fields=["status", "last_error", "retries", "next_attempt_at", "updated_at"]
+    )
+
+
+def _ensure_fiscal_receipt(*, command: DeviceCommand) -> None:
+    if command.command_type == DeviceCommand.Type.FISCALIZE_SALE:
+        receipt_type = FiscalReceipt.Type.SALE
+    elif command.command_type == DeviceCommand.Type.FISCALIZE_REFUND:
+        receipt_type = FiscalReceipt.Type.REFUND
+    elif command.command_type == DeviceCommand.Type.FISCALIZE_STORNO:
+        receipt_type = FiscalReceipt.Type.STORNO
+    else:
+        return
+
+    payment = command.payment
+    order = command.order
+    if not payment:
+        return
+
+    FiscalReceipt.objects.get_or_create(
+        payment=payment,
+        receipt_type=receipt_type,
+        defaults={
+            "org": payment.org,
+            "order": order,
+            "total": payment.amount,
+            "tax_total": order.tax_total if order else 0,
+            "currency": payment.currency,
+            "raw_payload": {"mock": True, "command_id": str(command.public_id)},
+        },
+    )
+
+
+@shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=3)
+def process_device_commands_mock(self, org_id: int, limit: int = 50) -> dict:
+    """
+    Mock Local Agent:
+    - Pulls pending device commands
+    - Validates payload shape
+    - ACKs success or FAILs with error
+    - Can simulate offline fiscalization via FISCAL_MOCK_OFFLINE
+    """
+    org = Organization.objects.filter(id=org_id).first()
+    if not org:
+        return {"processed": 0, "ack": 0, "failed": 0, "reason": "org_not_found"}
+
+    commands = pull_device_commands(org=org, limit=limit)
+    if not commands:
+        return {"processed": 0, "ack": 0, "failed": 0}
+
+    offline = getattr(settings, "FISCAL_MOCK_OFFLINE", False)
+
+    acked = 0
+    failed = 0
+    for command in commands:
+        if offline and command.command_type.startswith("fiscalize_"):
+            ack_device_command(
+                command=command,
+                status=DeviceCommand.Status.FAILED,
+                error="offline",
+            )
+            failed += 1
+            continue
+
+        ok, error = _validate_mock_fiscal_payload(command=command)
+        if not ok:
+            _hard_fail_command(command=command, error=error)
+            failed += 1
+            continue
+
+        if command.command_type.startswith("fiscalize_"):
+            _ensure_fiscal_receipt(command=command)
+
+        ack_device_command(
+            command=command,
+            status=DeviceCommand.Status.ACKED,
+            error="",
+        )
+        acked += 1
+
+    return {
+        "processed": len(commands),
+        "ack": acked,
+        "failed": failed,
+        "command_ids": [str(command.public_id) for command in commands],
+    }
+
+
 @shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=3)
 def dispatch_device_commands_for_all_orgs(self, limit: int = 50) -> dict:
     """
@@ -45,6 +172,21 @@ def dispatch_device_commands_for_all_orgs(self, limit: int = 50) -> dict:
     results = []
     for org_id in Organization.objects.values_list("id", flat=True):
         results.append(dispatch_device_commands.run(org_id=org_id, limit=limit))
+
+    return {
+        "orgs_processed": len(results),
+        "results": results,
+    }
+
+
+@shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=3)
+def process_device_commands_mock_for_all_orgs(self, limit: int = 50) -> dict:
+    """
+    Periodic mock-agent task for all orgs.
+    """
+    results = []
+    for org_id in Organization.objects.values_list("id", flat=True):
+        results.append(process_device_commands_mock.run(org_id=org_id, limit=limit))
 
     return {
         "orgs_processed": len(results),

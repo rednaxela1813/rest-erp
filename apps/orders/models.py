@@ -42,13 +42,17 @@ class Order(OrgScopedModel):
         Prices are VAT-inclusive: subtotal = sum(qty * unit_price),
         tax_total is extracted from the inclusive price, total = subtotal.
         """
-        items = self.items.select_related("tax_rate").all()
+        items = self.items.select_related("tax_rate").prefetch_related("addons").all()
 
         subtotal = Decimal("0.00")
         tax_total = Decimal("0.00")
 
         for it in items:
-            line_base = (it.qty * it.unit_price)
+            addons_total = sum(
+                (addon.price * addon.qty for addon in it.addons.all()),
+                Decimal("0.00"),
+            )
+            line_base = (it.qty * it.unit_price) + addons_total
             subtotal += line_base
             rate = it.tax_rate.rate if it.tax_rate else Decimal("0.00")
             if rate > 0:
@@ -83,6 +87,7 @@ class OrderItem(models.Model):
 
     product_name = models.CharField(max_length=255)
     qty = models.DecimalField(max_digits=12, decimal_places=3, default=Decimal("1.000"))
+    note = models.CharField(max_length=255, blank=True, default="")
 
     unit = models.ForeignKey(
         "products.Unit",
@@ -96,6 +101,14 @@ class OrderItem(models.Model):
         on_delete=models.PROTECT,
         related_name="order_items",
     )
+    variant = models.ForeignKey(
+        "products.ProductVariant",
+        on_delete=models.PROTECT,
+        related_name="order_items",
+        null=True,
+        blank=True,
+    )
+    variant_name = models.CharField(max_length=64, blank=True, default="")
 
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -104,6 +117,27 @@ class OrderItem(models.Model):
 
     def __str__(self) -> str:
         return f"{self.product_name} x {self.qty}"
+
+
+class OrderItemAddon(models.Model):
+    order_item = models.ForeignKey(
+        "orders.OrderItem",
+        on_delete=models.CASCADE,
+        related_name="addons",
+    )
+    addon = models.ForeignKey(
+        "products.ProductAddon",
+        on_delete=models.SET_NULL,
+        related_name="order_item_addons",
+        null=True,
+        blank=True,
+    )
+    name = models.CharField(max_length=255)
+    price = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    qty = models.DecimalField(max_digits=12, decimal_places=3, default=Decimal("1.000"))
+
+    class Meta:
+        ordering = ["id"]
     
     
 

@@ -219,6 +219,17 @@ Use-case: `start_payment` (создание payment intent).
 API:
 * `POST /api/v1/payments/start/` — создаёт (или возвращает) платеж по `idempotency_key`.
 
+Важно (текущая осознанная задвоенность):
+* В кассовом UI (`/cashier/checkout/`) платеж создаётся напрямую через ORM (`apps.cashier.views.checkout` → `_create_payment`).
+* API‑флоу (`/api/v1/payments/start/`) использует `start_payment` и `idempotency_key`.
+
+Почему так:
+* Для быстрого развития кассы без JS (HTMX, server‑render).
+* Для одного клиента без масштабирования, где важнее скорость разработки.
+
+План на будущее:
+* Уніфицировать: заставить `checkout()` вызывать `start_payment`, и свести логику к одному месту.
+
 ---
 
 ## 🚧 Что предстоит сделать дальше

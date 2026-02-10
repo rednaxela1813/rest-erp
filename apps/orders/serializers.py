@@ -3,9 +3,9 @@
 from rest_framework import serializers
 
 from config.orgs.org_context import get_request_org
-from apps.products.models import Product, Unit, TaxRate
+from apps.products.models import Product, ProductAddon, ProductVariant, Unit, TaxRate
 
-from .models import KitchenTicket, Order, OrderItem, OrderStatusEvent
+from .models import KitchenTicket, Order, OrderItem, OrderItemAddon, OrderStatusEvent
 from .logic.status_fsm import assert_can_transition
 
 
@@ -61,10 +61,29 @@ class OrderItemCreateSerializer(serializers.ModelSerializer):
     product = serializers.UUIDField()
     unit = serializers.UUIDField()
     tax_rate = serializers.UUIDField()
+    variant = serializers.UUIDField(required=False, allow_null=True, write_only=True)
+    addons = serializers.ListField(
+        child=serializers.UUIDField(),
+        required=False,
+        allow_empty=True,
+        write_only=True,
+    )
+    note = serializers.CharField(required=False, allow_blank=True)
 
     class Meta:
         model = OrderItem
-        fields = ["public_id", "product", "product_name", "qty", "unit", "unit_price", "tax_rate"]
+        fields = [
+            "public_id",
+            "product",
+            "product_name",
+            "qty",
+            "unit",
+            "unit_price",
+            "tax_rate",
+            "variant",
+            "addons",
+            "note",
+        ]
         read_only_fields = ["public_id", "product_name"]
 
     def validate(self, attrs):
@@ -104,6 +123,29 @@ class OrderItemCreateSerializer(serializers.ModelSerializer):
         attrs["product_obj"] = product_obj
         attrs["unit_obj"] = unit_obj
         attrs["tax_obj"] = tax_obj
+
+        variant_public_id = attrs.get("variant")
+        if variant_public_id:
+            try:
+                variant_obj = product_obj.variants.get(
+                    public_id=variant_public_id,
+                    status=ProductVariant.STATUS_ACTIVE,
+                )
+            except ProductVariant.DoesNotExist:
+                raise serializers.ValidationError({"variant": "Invalid variant."})
+            attrs["variant_obj"] = variant_obj
+
+        addon_public_ids = attrs.get("addons") or []
+        addon_objs = list(
+            ProductAddon.objects.filter(
+                product=product_obj,
+                public_id__in=addon_public_ids,
+                status=ProductAddon.STATUS_ACTIVE,
+            )
+        )
+        if len(addon_objs) != len(addon_public_ids):
+            raise serializers.ValidationError({"addons": "Invalid addons."})
+        attrs["addon_objs"] = addon_objs
         return attrs
 
     def create(self, validated_data):
@@ -115,19 +157,40 @@ class OrderItemCreateSerializer(serializers.ModelSerializer):
         product_obj = validated_data.pop("product_obj")
         unit_obj = validated_data.pop("unit_obj")
         tax_obj = validated_data.pop("tax_obj")
+        variant_obj = validated_data.pop("variant_obj", None)
+        addon_objs = validated_data.pop("addon_objs", [])
 
         validated_data.pop("product", None)
         validated_data.pop("unit", None)
         validated_data.pop("tax_rate", None)
+        validated_data.pop("variant", None)
+        validated_data.pop("addons", None)
 
         validated_data["product_name"] = product_obj.name
+        validated_data["variant_name"] = variant_obj.name if variant_obj else ""
 
-        return OrderItem.objects.create(
+        item = OrderItem.objects.create(
             product=product_obj,
             unit=unit_obj,
             tax_rate=tax_obj,
+            variant=variant_obj,
             **validated_data,
         )
+
+        if addon_objs:
+            OrderItemAddon.objects.bulk_create(
+                [
+                    OrderItemAddon(
+                        order_item=item,
+                        addon=addon,
+                        name=addon.name,
+                        price=addon.price,
+                        qty=item.qty,
+                    )
+                    for addon in addon_objs
+                ]
+            )
+        return item
 
 
 class OrderStatusEventSerializer(serializers.ModelSerializer):
