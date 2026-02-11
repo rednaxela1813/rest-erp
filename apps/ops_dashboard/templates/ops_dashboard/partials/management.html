@@ -1,0 +1,44 @@
+<div class="card">
+  <h3>Sales Summary</h3>
+  <table>
+    <tr><td>Orders</td><td>{{ management.sales_summary.orders_count }}</td></tr>
+    <tr><td>Total revenue</td><td>{{ management.sales_summary.revenue }}</td></tr>
+    <tr><td>Average чек</td><td>{{ management.sales_summary.avg_check }}</td></tr>
+  </table>
+</div>
+
+<div class="card">
+  <h3>Money Movement</h3>
+  <table>
+    <tr><th>Тип оплаты</th><th>Сумма</th></tr>
+    {% for row in management.money_movement.payments_by_tender %}
+      <tr><td>{{ row.tender }}</td><td>{{ row.amount }}</td></tr>
+    {% endfor %}
+    <tr><td>Refunds total</td><td>{{ management.money_movement.refunds_total }}</td></tr>
+    <tr><td>Storno total</td><td>{{ management.money_movement.storno_total }}</td></tr>
+  </table>
+</div>
+
+<div class="card">
+  <h3>Top Products (qty sold)</h3>
+  <table>
+    <tr><th>Product</th><th>Qty</th></tr>
+    {% for row in management.goods_movement.top_products %}
+      <tr><td>{{ row.product_name }}</td><td>{{ row.qty }}</td></tr>
+    {% empty %}
+      <tr><td colspan="2">No data</td></tr>
+    {% endfor %}
+  </table>
+</div>
+
+<div class="card">
+  <h3>Stock Levels</h3>
+  <table>
+    <tr><th>Product</th><th>Stock</th></tr>
+    {% for product in management.goods_movement.stock_levels %}
+      <tr><td>{{ product.name }}</td><td>{{ product.stock_qty }}</td></tr>
+    {% empty %}
+      <tr><td colspan="2">No data</td></tr>
+    {% endfor %}
+  </table>
+</div>

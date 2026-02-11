@@ -82,6 +82,49 @@
         color: var(--muted);
         font-size: 12px;
       }
+      .tabs {
+        display: flex;
+        gap: 8px;
+        margin-top: 20px;
+      }
+      .tab {
+        border: 1px solid var(--line);
+        background: var(--card);
+        color: var(--muted);
+        padding: 8px 14px;
+        border-radius: 999px;
+        cursor: pointer;
+        font-weight: 600;
+      }
+      .tab.active {
+        background: var(--accent);
+        color: white;
+        border-color: var(--accent);
+      }
+      .tab-panel {
+        display: none;
+        margin-top: 20px;
+      }
+      .tab-panel.active {
+        display: block;
+      }
+      .filters {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        align-items: center;
+        margin-bottom: 16px;
+      }
+      .filters input, .filters button {
+        padding: 6px 10px;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+      }
+      .filters button {
+        background: var(--accent);
+        color: white;
+        border: none;
+      }
     </style>
   </head>
   <body>
@@ -91,18 +134,47 @@
         <div class="org">Org: {{ org.name }}</div>
       </header>
 
-      <div
-        id="dashboard-metrics"
-        hx-get="/dashboard/metrics/?org={{ org.public_id }}"
-        hx-trigger="load, every 10s"
-        hx-swap="outerHTML"
-      >
-        {% include "ops_dashboard/partials/metrics.html" %}
+      <div class="tabs">
+        <button class="tab active" data-tab="ops">Operations</button>
+        <button class="tab" data-tab="management">Management</button>
+      </div>
+
+      <div class="tab-panel active" id="tab-ops">
+        <div
+          id="dashboard-metrics"
+          hx-get="/dashboard/metrics/?org={{ org.public_id }}"
+          hx-trigger="load, every 10s"
+          hx-swap="outerHTML"
+        >
+          {% include "ops_dashboard/partials/metrics.html" %}
+        </div>
+      </div>
+
+      <div class="tab-panel" id="tab-management">
+        <form class="filters" method="get">
+          <input type="hidden" name="org" value="{{ org.public_id }}">
+          <label>Start: <input type="date" name="start" value="{{ start_date }}"></label>
+          <label>End: <input type="date" name="end" value="{{ end_date }}"></label>
+          <button type="submit">Apply</button>
+        </form>
+        <div class="grid">
+          {% include "ops_dashboard/partials/management.html" %}
+        </div>
       </div>
 
       <div class="footer">
-        <span class="badge">Auto refresh</span> every 10 seconds
+        <span class="badge">Auto refresh</span> operations every 10 seconds
       </div>
     </div>
+    <script>
+      document.querySelectorAll(".tab").forEach((tab) => {
+        tab.addEventListener("click", () => {
+          document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
+          document.querySelectorAll(".tab-panel").forEach((p) => p.classList.remove("active"));
+          tab.classList.add("active");
+          document.getElementById(`tab-${tab.dataset.tab}`).classList.add("active");
+        });
+      });
+    </script>
   </body>
 </html>

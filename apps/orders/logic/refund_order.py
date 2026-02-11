@@ -2,12 +2,14 @@ from __future__ import annotations
 
 from django.db import transaction
 from rest_framework.exceptions import ValidationError
+import structlog
 
 from apps.orders.logic.cancel_order import cancel_order
 from apps.orders.models import Order
 from apps.payments.logic.enqueue_device_commands import enqueue_refund_commands
 from apps.payments.models import FiscalReceipt, OrderPayment
 
+logger = structlog.get_logger(__name__)
 
 def refund_paid_order(*, order: Order, actor=None) -> FiscalReceipt:
     """
@@ -77,6 +79,14 @@ def refund_paid_order(*, order: Order, actor=None) -> FiscalReceipt:
         enqueue_refund_commands(
             payment=payment,
             receipt_public_id=receipt_ref or str(receipt.public_id),
+        )
+
+        logger.info(
+            "order_refunded",
+            order_id=str(cancelled.public_id),
+            payment_id=str(payment.public_id),
+            receipt_ref=receipt_ref or "",
+            actor_id=str(actor.id) if actor else "",
         )
 
     return receipt

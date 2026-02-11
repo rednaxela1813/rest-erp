@@ -2,12 +2,16 @@ from __future__ import annotations
 
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
-from django.db.models import Count
+from datetime import date, datetime, timedelta
+
+from django.db.models import Count, Sum
 from django.shortcuts import render, redirect
+from django.utils import timezone
 
 from config.orgs.models import Organization, OrganizationMember
-from apps.orders.models import Order
-from apps.payments.models import CashierSession, DeviceCommand, OrderPayment
+from apps.orders.models import Order, OrderItem
+from apps.payments.models import CashierSession, DeviceCommand, OrderPayment, FiscalReceipt
+from apps.products.models import Product
 
 
 def _ensure_admin_or_owner(request, org) -> None:
@@ -92,6 +96,100 @@ def _get_dashboard_metrics(org) -> dict:
     }
 
 
+def _parse_date(value: str | None) -> date | None:
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def _get_period(request) -> tuple[datetime, datetime, str, str]:
+    start_raw = request.GET.get("start")
+    end_raw = request.GET.get("end")
+    start_date = _parse_date(start_raw)
+    end_date = _parse_date(end_raw)
+
+    if not end_date:
+        end_date = timezone.localdate()
+    if not start_date:
+        start_date = end_date - timedelta(days=7)
+
+    start_dt = datetime.combine(start_date, datetime.min.time())
+    end_dt = datetime.combine(end_date + timedelta(days=1), datetime.min.time())
+    start_dt = timezone.make_aware(start_dt)
+    end_dt = timezone.make_aware(end_dt)
+    return start_dt, end_dt, start_date.isoformat(), end_date.isoformat()
+
+
+def _get_management_tables(org, start_dt, end_dt) -> dict:
+    paid_orders = Order.objects.filter(
+        org=org,
+        status=Order.STATUS_PAID,
+        created_at__gte=start_dt,
+        created_at__lt=end_dt,
+    )
+    orders_count = paid_orders.count()
+    revenue = paid_orders.aggregate(total=Sum("total")).get("total") or 0
+    avg_check = (revenue / orders_count) if orders_count else 0
+
+    payments = OrderPayment.objects.filter(
+        org=org,
+        status=OrderPayment.Status.CAPTURED,
+        created_at__gte=start_dt,
+        created_at__lt=end_dt,
+    )
+    payments_by_tender = []
+    for tender, _label in OrderPayment.Tender.choices:
+        total = payments.filter(tender=tender).aggregate(amount=Sum("amount")).get("amount") or 0
+        payments_by_tender.append({"tender": tender, "amount": total})
+
+    refunds_total = FiscalReceipt.objects.filter(
+        org=org,
+        receipt_type=FiscalReceipt.Type.REFUND,
+        created_at__gte=start_dt,
+        created_at__lt=end_dt,
+    ).aggregate(total=Sum("total")).get("total") or 0
+    storno_total = FiscalReceipt.objects.filter(
+        org=org,
+        receipt_type=FiscalReceipt.Type.STORNO,
+        created_at__gte=start_dt,
+        created_at__lt=end_dt,
+    ).aggregate(total=Sum("total")).get("total") or 0
+
+    top_products = (
+        OrderItem.objects
+        .filter(order__in=paid_orders)
+        .values("product_name")
+        .annotate(qty=Sum("qty"))
+        .order_by("-qty")[:10]
+    )
+
+    stock_levels = (
+        Product.objects
+        .filter(org=org, stock_qty__isnull=False)
+        .order_by("stock_qty", "name")[:50]
+    )
+
+    return {
+        "sales_summary": {
+            "orders_count": orders_count,
+            "revenue": revenue,
+            "avg_check": avg_check,
+        },
+        "money_movement": {
+            "payments_by_tender": payments_by_tender,
+            "refunds_total": refunds_total,
+            "storno_total": storno_total,
+        },
+        "goods_movement": {
+            "top_products": list(top_products),
+            "stock_levels": list(stock_levels),
+        },
+    }
+
+
 @login_required(login_url="/cashier/login/")
 def ops_dashboard_view(request):
     try:
@@ -102,10 +200,18 @@ def ops_dashboard_view(request):
         raise
     _ensure_admin_or_owner(request, org)
     metrics = _get_dashboard_metrics(org)
+    start_dt, end_dt, start_value, end_value = _get_period(request)
+    management = _get_management_tables(org, start_dt, end_dt)
     return render(
         request,
         "ops_dashboard/dashboard.html",
-        {"org": org, "metrics": metrics},
+        {
+            "org": org,
+            "metrics": metrics,
+            "management": management,
+            "start_date": start_value,
+            "end_date": end_value,
+        },
     )
 
 

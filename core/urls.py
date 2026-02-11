@@ -33,6 +33,7 @@ urlpatterns = [
     path("api/v1/", include("apps.payments.urls")),
     path("cashier/", include("apps.cashier.urls")),
     path("", include("apps.ops_dashboard.urls")),
+    path("ops/logs/", include("apps.logs_dashboard.urls")),
 
 
 ]

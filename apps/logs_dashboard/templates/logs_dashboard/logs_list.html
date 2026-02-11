@@ -1,0 +1,152 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Logs Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link href="{% static 'cashier/cashier.css' %}" rel="stylesheet">
+    <style>
+      .logs-table { width: 100%; border-collapse: collapse; }
+      .logs-table th, .logs-table td { text-align: left; padding: 0.7rem; border-bottom: 1px solid var(--stroke); vertical-align: top; }
+      .logs-table code { white-space: pre-wrap; font-family: "Space Mono", monospace; font-size: 0.85rem; }
+      .logs-muted { color: var(--ink-soft); font-size: 0.85rem; }
+      .logs-badge { display: inline-block; padding: 0.2rem 0.55rem; border-radius: 999px; font-size: 0.75rem; font-weight: 700; }
+      .lvl-INFO { background: rgba(18, 194, 160, 0.15); color: #0d6b58; }
+      .lvl-WARNING { background: rgba(255, 149, 0, 0.18); color: #8a4b00; }
+      .lvl-ERROR { background: rgba(255, 77, 77, 0.18); color: #8a1f1f; }
+      .logs-filter { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; }
+      .logs-filter input, .logs-filter select { border: 1px solid var(--stroke); border-radius: 12px; padding: 0.45rem 0.6rem; }
+      .logs-filter button, .logs-filter a { background: var(--ink); color: white; border: none; border-radius: 999px; padding: 0.45rem 0.9rem; font-weight: 600; }
+      .logs-filter a { text-decoration: none; display: inline-block; }
+      .logs-row:hover { background: rgba(16, 20, 24, 0.03); cursor: pointer; }
+      .logs-meta { display: grid; gap: 0.2rem; font-size: 0.78rem; color: var(--ink-soft); }
+      .logs-panel { display: grid; gap: 1rem; }
+      .logs-pagination { display: flex; gap: 0.8rem; align-items: center; margin-top: 1.2rem; }
+    </style>
+  </head>
+  <body class="pos-body">
+    <div class="pos-shell">
+      <div class="pos-header">
+        <div>
+          <div class="pos-brand">Logs Dashboard</div>
+          <div class="pos-subtitle">Only logs for the active org are shown.</div>
+        </div>
+      </div>
+
+    {% if user_orgs|length > 1 %}
+    <form method="get" style="margin-top: 8px;">
+      <label>
+        Organization:
+        <select name="org">
+          {% for org in user_orgs %}
+            <option value="{{ org.id }}" {% if org.id == active_org_id %}selected{% endif %}>{{ org.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <button type="submit">Switch</button>
+    </form>
+    {% endif %}
+
+    <div class="pos-panel logs-panel">
+    <form method="get" class="logs-filter">
+      <label>
+        Level:
+        <select name="level">
+          <option value="">All</option>
+          <option value="INFO" {% if level == "INFO" %}selected{% endif %}>INFO</option>
+          <option value="WARNING" {% if level == "WARNING" %}selected{% endif %}>WARNING</option>
+          <option value="ERROR" {% if level == "ERROR" %}selected{% endif %}>ERROR</option>
+        </select>
+      </label>
+      <label style="margin-left: 12px;">
+        Search:
+        <input type="text" name="q" value="{{ q }}" placeholder="message contains..." />
+      </label>
+      <label>
+        Request ID:
+        <input type="text" name="request_id" value="{{ request_id }}" />
+      </label>
+      <label>
+        User ID:
+        <input type="text" name="user_id" value="{{ user_id }}" />
+      </label>
+      <label>
+        Path:
+        <input type="text" name="path" value="{{ path }}" />
+      </label>
+      <label>
+        Method:
+        <input type="text" name="method" value="{{ method }}" />
+      </label>
+      <label>
+        Task ID:
+        <input type="text" name="task_id" value="{{ task_id }}" />
+      </label>
+      <label>
+        Task Name:
+        <input type="text" name="task_name" value="{{ task_name }}" />
+      </label>
+      <button type="submit">Filter</button>
+      <a href="?format=csv&limit=50000&level={{ level }}&q={{ q }}&request_id={{ request_id }}&user_id={{ user_id }}&path={{ path }}&method={{ method }}&task_id={{ task_id }}&task_name={{ task_name }}">Export CSV</a>
+    </form>
+
+    <table class="logs-table">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Level</th>
+          <th>Event</th>
+          <th>Message</th>
+          <th>Request</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in page.object_list %}
+        <tr class="logs-row" data-request-id="{{ row.request_id }}">
+          <td>{{ row.created_at }}</td>
+          <td><span class="logs-badge lvl-{{ row.level }}">{{ row.level }}</span></td>
+          <td>{{ row.event }}</td>
+          <td><code>{{ row.message }}</code></td>
+          <td class="logs-meta">
+            <div>request_id={{ row.request_id }}</div>
+            <div>user_id={{ row.user_id }}</div>
+            <div>path={{ row.path }}</div>
+            <div>method={{ row.method }}</div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5">No logs found.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="logs-pagination">
+      {% if page.has_previous %}
+        <a href="?page={{ page.previous_page_number }}&level={{ level }}&q={{ q }}">Prev</a>
+      {% endif %}
+      <span>Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+      {% if page.has_next %}
+        <a href="?page={{ page.next_page_number }}&level={{ level }}&q={{ q }}">Next</a>
+      {% endif %}
+    </div>
+    </div>
+    </div>
+
+    <script>
+      document.addEventListener("click", function (event) {
+        const row = event.target.closest("tr[data-request-id]");
+        if (!row) return;
+        const requestId = row.getAttribute("data-request-id");
+        if (!requestId) return;
+        const input = document.querySelector('input[name="request_id"]');
+        if (input) {
+          input.value = requestId;
+        }
+      });
+    </script>
+  </body>
+</html>

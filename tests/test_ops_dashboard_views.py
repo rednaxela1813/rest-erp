@@ -58,3 +58,13 @@ def test_ops_dashboard_metrics_counts(admin_client):
     resp = client.get(f"/dashboard/metrics/?org={org.public_id}")
     assert resp.status_code == 200
     assert b"Unsent fiscal receipts" in resp.content
+
+
+@pytest.mark.django_db
+def test_ops_dashboard_management_tab(admin_client):
+    client, user, org = admin_client
+    client.force_login(user)
+
+    resp = client.get(f"/dashboard/?org={org.public_id}")
+    assert resp.status_code == 200
+    assert b"Management" in resp.content

@@ -3,14 +3,25 @@ from __future__ import annotations
 from django.db import transaction
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
+import structlog
 
 from apps.payments.logic.enqueue_device_commands import enqueue_payment_commands
 from apps.payments.models import FiscalReceipt, OrderPayment
 from apps.payments.providers import registry
 from apps.orders.logic.finalize_paid_order import finalize_paid_order
 
+logger = structlog.get_logger(__name__)
+
 
 def capture_payment(*, payment: OrderPayment, actor=None, timeout_s: int = 30) -> OrderPayment:
+    logger.info(
+        "payment_capture_started",
+        payment_id=str(payment.public_id),
+        order_id=str(payment.order.public_id),
+        amount=str(payment.amount),
+        tender=payment.tender,
+        provider=payment.provider,
+    )
     if payment.status != OrderPayment.Status.AUTHORIZED:
         raise ValidationError({"status": ["Payment is not authorized."]})
 
@@ -44,4 +55,10 @@ def capture_payment(*, payment: OrderPayment, actor=None, timeout_s: int = 30) -
         include_kot = payment.order.kitchen_tickets.exists()
         enqueue_payment_commands(payment=payment, include_kot=include_kot)
 
+    logger.info(
+        "payment_capture_succeeded",
+        payment_id=str(payment.public_id),
+        order_id=str(payment.order.public_id),
+        fiscal_receipt_created=payment.tender == OrderPayment.Tender.CARD,
+    )
     return payment

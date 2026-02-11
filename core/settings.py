@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 from decouple import config
+import structlog
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -46,6 +47,8 @@ INSTALLED_APPS = [
     'config.users',
     "config.dictionaries",
     "config.orgs",
+    "apps.logs_dashboard",
+    "config.observability",
     
     "apps.partners",
     "apps.products",
@@ -80,9 +83,11 @@ LOGIN_URL = "/cashier/login/"
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'config.orgs.middleware.SessionOrgMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'config.observability.middleware.RequestContextMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -201,6 +206,8 @@ EKASA_PASSWORD = config("EKASA_PASSWORD", default="")
 EKASA_CASH_REGISTER_CODE = config("EKASA_CASH_REGISTER_CODE", default="")
 EKASA_ENABLED = config("EKASA_ENABLED", cast=bool, default=False)
 FISCAL_RECONCILE_ENABLED = config("FISCAL_RECONCILE_ENABLED", cast=bool, default=True)
+LOG_RETENTION_ENABLED = config("LOG_RETENTION_ENABLED", cast=bool, default=True)
+LOG_RETENTION_DAYS = config("LOG_RETENTION_DAYS", cast=int, default=30)
 
 if FISCAL_MOCK_ENABLED:
     CELERY_BEAT_SCHEDULE["mock-device-commands-all-orgs"] = {
@@ -223,6 +230,13 @@ if FISCAL_RECONCILE_ENABLED:
         "kwargs": {"limit": 200},
     }
 
+if LOG_RETENTION_ENABLED:
+    CELERY_BEAT_SCHEDULE["purge-old-logs"] = {
+        "task": "apps.logs_dashboard.tasks.purge_old_logs",
+        "schedule": 3600.0,
+        "kwargs": {"days": LOG_RETENTION_DAYS},
+    }
+
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
@@ -233,3 +247,70 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Logging
+LOG_LEVEL = config("LOG_LEVEL", default="INFO")
+LOG_DB_ENABLED = config("LOG_DB_ENABLED", cast=bool, default=True)
+
+structlog.configure(
+    processors=[
+        structlog.contextvars.merge_contextvars,
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.stdlib.add_log_level,
+        structlog.processors.format_exc_info,
+        "config.observability.logging.mask_sensitive",
+        structlog.processors.JSONRenderer(),
+    ],
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    cache_logger_on_first_use=True,
+)
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "filters": {
+        "apps_only": {
+            "()": "config.observability.logging.AppsOnlyFilter",
+        },
+    },
+    "formatters": {
+        "json": {
+            "()": "structlog.stdlib.ProcessorFormatter",
+            "processor": "structlog.processors.JSONRenderer",
+            "foreign_pre_chain": [
+                "structlog.contextvars.merge_contextvars",
+                "structlog.processors.TimeStamper",
+                "structlog.stdlib.add_log_level",
+                "structlog.processors.format_exc_info",
+                "config.observability.logging.mask_sensitive",
+            ],
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "json",
+        },
+        "db": {
+            "()": "config.observability.logging.DBLogHandler",
+            "level": LOG_LEVEL,
+            "filters": ["apps_only"],
+        },
+    },
+    "root": {
+        "handlers": ["console"] + (["db"] if LOG_DB_ENABLED else []),
+        "level": LOG_LEVEL,
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["console"],
+            "level": LOG_LEVEL,
+            "propagate": False,
+        },
+        "django.request": {
+            "handlers": ["console"],
+            "level": LOG_LEVEL,
+            "propagate": False,
+        },
+    },
+}

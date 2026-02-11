@@ -4,9 +4,11 @@ from decimal import Decimal
 
 from django.db import transaction
 from rest_framework.exceptions import ValidationError
+import structlog
 
 from apps.orders.models import Order
 
+logger = structlog.get_logger(__name__)
 
 def cancel_order(*, order: Order, actor=None) -> Order:
     """
@@ -109,5 +111,10 @@ def cancel_order(*, order: Order, actor=None) -> Order:
             actor=actor if actor is not None else None,
      )
 
+        logger.info(
+            "order_cancelled",
+            order_id=str(locked_order.public_id),
+            actor_id=str(actor.id) if actor else "",
+        )
 
         return locked_order
