@@ -290,6 +290,51 @@ class FiscalReceiptsHealthApi(APIView):
         )
 
 
+class EkasaHealthApi(APIView):
+    """
+    Health endpoint for eKasa device command queue and errors.
+    """
+
+    permission_classes = [IsAuthenticated, IsOrgMemberReadOnlyOrOrgAdmin]
+
+    def get(self, request):
+        org = get_request_org(request)
+
+        qs = DeviceCommand.objects.filter(
+            org=org,
+            command_type__in=[
+                DeviceCommand.Type.FISCALIZE_SALE,
+                DeviceCommand.Type.FISCALIZE_REFUND,
+                DeviceCommand.Type.FISCALIZE_STORNO,
+            ],
+        )
+
+        status_counts = {
+            DeviceCommand.Status.PENDING: 0,
+            DeviceCommand.Status.SENT: 0,
+            DeviceCommand.Status.ACKED: 0,
+            DeviceCommand.Status.FAILED: 0,
+        }
+        for row in qs.values("status").annotate(count=Count("id")):
+            status_counts[row["status"]] = row["count"]
+
+        failed_qs = qs.filter(status=DeviceCommand.Status.FAILED)
+        oldest_failed = failed_qs.order_by("created_at").first()
+        oldest_pending = qs.filter(status=DeviceCommand.Status.PENDING).order_by("created_at").first()
+
+        return Response(
+            {
+                "total": qs.count(),
+                "status_counts": status_counts,
+                "failed_total": failed_qs.count(),
+                "oldest_failed_created_at": oldest_failed.created_at if oldest_failed else None,
+                "oldest_failed_public_id": str(oldest_failed.public_id) if oldest_failed else None,
+                "oldest_pending_created_at": oldest_pending.created_at if oldest_pending else None,
+                "oldest_pending_public_id": str(oldest_pending.public_id) if oldest_pending else None,
+            }
+        )
+
+
 class ShiftOpenSerializer(serializers.Serializer):
     terminal = serializers.UUIDField()
     opening_cash = serializers.DecimalField(max_digits=12, decimal_places=2, required=False)

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from apps.payments.providers.manual import ManualProvider
+from apps.payments.providers.ekasa import EkasaProvider
 
 
 _PROVIDERS = {
     "manual": ManualProvider(),
+    "ekasa": EkasaProvider(),
 }
 
 

@@ -45,3 +45,10 @@ build/
 
 # Archives
 project.zip
+
+celerybeat.pid
+celerybeat-schedule
+celerybeat-schedule-shm
+celerybeat-schedule-wal
+
+

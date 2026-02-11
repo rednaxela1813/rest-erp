@@ -62,7 +62,21 @@ def refund_paid_order(*, order: Order, actor=None) -> FiscalReceipt:
             },
         )
 
+        # Use the original eKasa receipt reference if available.
+        sale_receipt = (
+            FiscalReceipt.objects
+            .filter(payment=payment, receipt_type=FiscalReceipt.Type.SALE)
+            .order_by("-created_at")
+            .first()
+        )
+        receipt_ref = ""
+        if sale_receipt:
+            receipt_ref = (sale_receipt.raw_payload or {}).get("receipt_id") or ""
+
         # Enqueue commands so Local Agent can execute refund + print.
-        enqueue_refund_commands(payment=payment, receipt_public_id=str(receipt.public_id))
+        enqueue_refund_commands(
+            payment=payment,
+            receipt_public_id=receipt_ref or str(receipt.public_id),
+        )
 
     return receipt

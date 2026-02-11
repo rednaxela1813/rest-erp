@@ -3,6 +3,7 @@ from django.contrib import admin
 from .models import (
     CashierSession,
     CashDrawerMovement,
+    DeviceCommand,
     OrderPayment,
     PaymentEvent,
     PaymentProviderConfig,
@@ -78,6 +79,28 @@ class OrderPaymentAdmin(admin.ModelAdmin):
         """
         updated = queryset.update(fiscal_status=OrderPayment.FiscalStatus.FAILED)
         self.message_user(request, f"Updated fiscal_status=failed for {updated} payments.")
+
+
+@admin.register(DeviceCommand)
+class DeviceCommandAdmin(admin.ModelAdmin):
+    list_display = ("public_id", "command_type", "status", "retries", "payment", "order", "created_at")
+    list_filter = ("command_type", "status")
+    search_fields = ("public_id", "payment__public_id", "order__public_id")
+    actions = ("requeue_for_retry",)
+
+    def requeue_for_retry(self, request, queryset):
+        """
+        Manual resolution for eKasa/device errors:
+        - Reset retries to allow processing again.
+        - Clear next_attempt_at to make it eligible immediately.
+        """
+        updated = queryset.update(
+            status=DeviceCommand.Status.PENDING,
+            retries=0,
+            last_error="manual_requeue",
+            next_attempt_at=None,
+        )
+        self.message_user(request, f"Re-queued {updated} device commands for retry.")
 
 
 @admin.register(PaymentEvent)

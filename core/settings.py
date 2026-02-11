@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     
     'rest_framework',
     'rest_framework_simplejwt.token_blacklist',
+    'drf_spectacular',
 
     'config.users',
     "config.dictionaries",
@@ -61,6 +62,13 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+}
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "ERP for Burger API",
+    "DESCRIPTION": "API documentation for the ERP backend.",
+    "VERSION": "1.0.0",
 }
 
 DEFAULT_CURRENCY = config("DEFAULT_CURRENCY", default="EUR")
@@ -184,11 +192,35 @@ DEVICE_COMMANDS_RETRY_MAX_SECONDS = config(
 FISCAL_MOCK_ENABLED = config("FISCAL_MOCK_ENABLED", cast=bool, default=False)
 FISCAL_MOCK_OFFLINE = config("FISCAL_MOCK_OFFLINE", cast=bool, default=False)
 
+# eKasa (NineDigit) Web API settings for payment/fiscal adapters.
+EKASA_BASE_URL = config("EKASA_BASE_URL", default="")
+EKASA_API_KEY = config("EKASA_API_KEY", default="")
+EKASA_TIMEOUT_S = config("EKASA_TIMEOUT_S", cast=int, default=30)
+EKASA_USERNAME = config("EKASA_USERNAME", default="")
+EKASA_PASSWORD = config("EKASA_PASSWORD", default="")
+EKASA_CASH_REGISTER_CODE = config("EKASA_CASH_REGISTER_CODE", default="")
+EKASA_ENABLED = config("EKASA_ENABLED", cast=bool, default=False)
+FISCAL_RECONCILE_ENABLED = config("FISCAL_RECONCILE_ENABLED", cast=bool, default=True)
+
 if FISCAL_MOCK_ENABLED:
     CELERY_BEAT_SCHEDULE["mock-device-commands-all-orgs"] = {
         "task": "apps.payments.tasks.process_device_commands_mock_for_all_orgs",
         "schedule": 5.0,
         "kwargs": {"limit": 50},
+    }
+
+if EKASA_ENABLED:
+    CELERY_BEAT_SCHEDULE["ekasa-device-commands-all-orgs"] = {
+        "task": "apps.payments.tasks.process_device_commands_ekasa_for_all_orgs",
+        "schedule": 5.0,
+        "kwargs": {"limit": 50},
+    }
+
+if FISCAL_RECONCILE_ENABLED:
+    CELERY_BEAT_SCHEDULE["reconcile-fiscal-status-all-orgs"] = {
+        "task": "apps.payments.tasks.reconcile_payment_fiscal_status_for_all_orgs",
+        "schedule": 60.0,
+        "kwargs": {"limit": 200},
     }
 
 

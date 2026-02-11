@@ -20,7 +20,7 @@ def _compute_retry_delay_seconds(retries: int) -> int:
     return min(delay, cap)
 
 
-def pull_device_commands(*, org, limit: int = 50) -> list[DeviceCommand]:
+def pull_device_commands(*, org, limit: int = 50, command_types: list[str] | None = None) -> list[DeviceCommand]:
     """
     Fetch pending commands and mark them as SENT in one transaction.
 
@@ -38,8 +38,11 @@ def pull_device_commands(*, org, limit: int = 50) -> list[DeviceCommand]:
                 retries__lt=models.F("max_retries"),
             )
             .filter(Q(next_attempt_at__isnull=True) | Q(next_attempt_at__lte=now))
-            .order_by("created_at", "id")[:limit]
         )
+        if command_types:
+            commands_qs = commands_qs.filter(command_type__in=command_types)
+
+        commands_qs = commands_qs.order_by("created_at", "id")[:limit]
 
         # Evaluate queryset inside the transaction to keep locks consistent.
         commands = list(commands_qs)

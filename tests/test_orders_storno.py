@@ -40,6 +40,9 @@ def test_admin_can_storno_paid_order(admin_client, payment_factory, capture_paym
     resp_pay = capture_payment_api(client, payment)
     assert resp_pay.status_code == 200, resp_pay.content
 
+    # Simulate eKasa receipt reference captured on sale.
+    FiscalReceipt.objects.update(raw_payload={"receipt_id": "ekasa-sale-2"})
+
     storno = client.post(f"/api/v1/orders/{order.public_id}/storno/")
     assert storno.status_code == 200, storno.content
 
@@ -53,6 +56,7 @@ def test_admin_can_storno_paid_order(admin_client, payment_factory, capture_paym
         payment=payment, command_type=DeviceCommand.Type.FISCALIZE_STORNO
     )
     assert storno_commands.count() == 1
+    assert storno_commands.first().payload["receipt_id"] == "ekasa-sale-2"
 
 
 @pytest.mark.django_db
