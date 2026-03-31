@@ -34,6 +34,7 @@ def test_build_cash_register_request_sale():
     assert str(req["items"][0]["unitPrice"]) == "5.00"
     assert str(req["items"][0]["price"]) == "10.00"
     assert req["payments"][0]["type"] == "cash"
+    assert req["payments"][0]["name"] == "Cash"
 
 
 def test_build_cash_register_request_refund_requires_reference():

@@ -26,11 +26,12 @@
       hx-trigger="load, every 2s"
       hx-target="#payment-status"
       hx-swap="innerHTML"
+      data-home-url="{% url 'cashier:home' %}"
     >
       {% include "cashier/partials/payment_status.html" %}
     </div>
 
-    {% if debug %}
+    {% if debug and not ekasa_enabled %}
       <div class="pos-debug">
         <div class="pos-debug-title">Debug controls</div>
         <div class="pos-debug-actions">
@@ -47,4 +48,25 @@
     {% endif %}
   </section>
 </div>
+<script>
+  (() => {
+    let redirected = false;
+    const maybeRedirectHome = () => {
+      if (redirected) return;
+      const root = document.getElementById("payment-status");
+      if (!root) return;
+      const success = root.querySelector(".pos-success");
+      if (!success) return;
+      redirected = true;
+      window.location.href = root.dataset.homeUrl || "{% url 'cashier:home' %}";
+    };
+
+    document.addEventListener("DOMContentLoaded", maybeRedirectHome);
+    document.addEventListener("htmx:afterSwap", (event) => {
+      if (event.target && event.target.id === "payment-status") {
+        maybeRedirectHome();
+      }
+    });
+  })();
+</script>
 {% endblock %}

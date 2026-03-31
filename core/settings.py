@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 from pathlib import Path
 from decouple import config
 import structlog
+from config.observability.logging import mask_sensitive
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -52,10 +53,14 @@ INSTALLED_APPS = [
     
     "apps.partners",
     "apps.products",
+    
     "apps.orders",
     "apps.payments",
     "apps.cashier",
     "apps.ops_dashboard",
+    
+    "apps.inventory",
+    "apps.equipment",
 
 ]
 
@@ -258,7 +263,7 @@ structlog.configure(
         structlog.processors.TimeStamper(fmt="iso"),
         structlog.stdlib.add_log_level,
         structlog.processors.format_exc_info,
-        "config.observability.logging.mask_sensitive",
+        mask_sensitive,
         structlog.processors.JSONRenderer(),
     ],
     logger_factory=structlog.stdlib.LoggerFactory(),
@@ -276,13 +281,13 @@ LOGGING = {
     "formatters": {
         "json": {
             "()": "structlog.stdlib.ProcessorFormatter",
-            "processor": "structlog.processors.JSONRenderer",
+            "processor": structlog.processors.JSONRenderer(),
             "foreign_pre_chain": [
-                "structlog.contextvars.merge_contextvars",
-                "structlog.processors.TimeStamper",
-                "structlog.stdlib.add_log_level",
-                "structlog.processors.format_exc_info",
-                "config.observability.logging.mask_sensitive",
+                structlog.contextvars.merge_contextvars,
+                structlog.processors.TimeStamper(fmt="iso"),
+                structlog.stdlib.add_log_level,
+                structlog.processors.format_exc_info,
+                mask_sensitive,
             ],
         },
     },

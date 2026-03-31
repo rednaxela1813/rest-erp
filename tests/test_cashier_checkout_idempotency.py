@@ -3,7 +3,8 @@ from decimal import Decimal
 import pytest
 
 from apps.cashier import views as cashier_views
-from apps.payments.models import CashierSession, OrderPayment, Terminal
+from apps.orders.models import Order
+from apps.payments.models import CashierSession, DeviceCommand, OrderPayment, Terminal
 from apps.products.models import Product, TaxRate, Unit
 from config.orgs.models import OrganizationMember
 
@@ -42,6 +43,7 @@ def _prepare_product(*, org) -> Product:
         unit=unit,
         tax_rate=tax_rate,
         unit_price=Decimal("5.00"),
+        stock_qty=Decimal("10.000"),
     )
 
 
@@ -123,3 +125,125 @@ def test_checkout_idempotency_resets_on_cart_change(cashier_client):
     assert OrderPayment.objects.filter(org=org).count() == 2
     payment_2 = OrderPayment.objects.exclude(id=payment_1.id).get(org=org)
     assert payment_1.idempotency_key != payment_2.idempotency_key
+
+
+@pytest.mark.django_db
+def test_confirm_cash_enqueues_fiscal_device_commands(cashier_client):
+    client, user, org = cashier_client
+    _prepare_cashier_session(client=client, org=org, user=user)
+    product = _prepare_product(org=org)
+
+    session_data = client.session
+    session_data[cashier_views.SESSION_CART] = {str(product.id): 1}
+    session_data.save()
+
+    response = client.post("/cashier/checkout/", data={"tender": "cash"})
+    assert response.status_code == 302
+
+    payment = OrderPayment.objects.get(org=org)
+    confirm_resp = client.post(f"/cashier/payments/{payment.public_id}/confirm/cash/")
+    assert confirm_resp.status_code == 302
+
+    command_types = set(
+        DeviceCommand.objects.filter(payment=payment).values_list("command_type", flat=True)
+    )
+    assert command_types == {
+        DeviceCommand.Type.FISCALIZE_SALE,
+        DeviceCommand.Type.PRINT_RECEIPT,
+    }
+
+
+@pytest.mark.django_db
+def test_checkout_cash_auto_confirms_payment(cashier_client):
+    client, user, org = cashier_client
+    _prepare_cashier_session(client=client, org=org, user=user)
+    product = _prepare_product(org=org)
+
+    session_data = client.session
+    session_data[cashier_views.SESSION_CART] = {str(product.id): 1}
+    session_data.save()
+
+    response = client.post("/cashier/checkout/", data={"tender": "cash"})
+    assert response.status_code == 302
+
+    payment = OrderPayment.objects.get(org=org)
+    assert payment.status == OrderPayment.Status.CAPTURED
+
+
+@pytest.mark.django_db
+def test_checkout_card_auto_confirms_payment(cashier_client):
+    client, user, org = cashier_client
+    _prepare_cashier_session(client=client, org=org, user=user)
+    product = _prepare_product(org=org)
+
+    session_data = client.session
+    session_data[cashier_views.SESSION_CART] = {str(product.id): 1}
+    session_data.save()
+
+    response = client.post("/cashier/checkout/", data={"tender": "card"})
+    assert response.status_code == 302
+
+    payment = OrderPayment.objects.get(org=org)
+    assert payment.status == OrderPayment.Status.CAPTURED
+
+
+@pytest.mark.django_db
+def test_checkout_with_invalid_product_config_does_not_create_empty_draft(cashier_client):
+    client, user, org = cashier_client
+    _prepare_cashier_session(client=client, org=org, user=user)
+    product = Product.objects.create(
+        org=org,
+        name="Broken product",
+        unit=None,
+        tax_rate=None,
+        unit_price=Decimal("5.00"),
+    )
+
+    session_data = client.session
+    session_data[cashier_views.SESSION_CART] = {str(product.id): 1}
+    session_data.save()
+
+    response = client.post("/cashier/checkout/", data={"tender": "cash"})
+    assert response.status_code == 302
+    assert response.url == "/cashier/"
+    assert Order.objects.filter(org=org, status=Order.STATUS_DRAFT).count() == 0
+    assert OrderPayment.objects.filter(org=org).count() == 0
+
+
+@pytest.mark.django_db
+def test_retry_fiscal_rebuilds_payload_and_requeues_failed_command(cashier_client):
+    client, user, org = cashier_client
+    _prepare_cashier_session(client=client, org=org, user=user)
+    product = _prepare_product(org=org)
+    product.tax_rate.rate = Decimal("10.00")
+    product.tax_rate.save(update_fields=["rate"])
+
+    session_data = client.session
+    session_data[cashier_views.SESSION_CART] = {str(product.id): 1}
+    session_data.save()
+
+    response = client.post("/cashier/checkout/", data={"tender": "cash"})
+    assert response.status_code == 302
+    payment = OrderPayment.objects.get(org=org)
+
+    command = DeviceCommand.objects.get(payment=payment, command_type=DeviceCommand.Type.FISCALIZE_SALE)
+    command.status = DeviceCommand.Status.FAILED
+    command.last_error = "vat rate rejected"
+    command.save(update_fields=["status", "last_error", "updated_at"])
+    payment.fiscal_status = OrderPayment.FiscalStatus.FAILED
+    payment.failure_reason = "vat rate rejected"
+    payment.save(update_fields=["fiscal_status", "failure_reason", "updated_at"])
+
+    product.tax_rate.rate = Decimal("20.00")
+    product.tax_rate.save(update_fields=["rate"])
+
+    retry_resp = client.post(f"/cashier/payments/{payment.public_id}/retry-fiscal/")
+    assert retry_resp.status_code == 302
+
+    command.refresh_from_db()
+    payment.refresh_from_db()
+    assert command.status == DeviceCommand.Status.PENDING
+    assert command.last_error == ""
+    assert command.payload["items"][0]["tax_rate"] == "20.00"
+    assert payment.fiscal_status == OrderPayment.FiscalStatus.PENDING
+    assert payment.failure_reason == ""

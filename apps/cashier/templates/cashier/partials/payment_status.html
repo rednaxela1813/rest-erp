@@ -9,23 +9,41 @@
   </div>
 </div>
 
-{% if payment.status == "captured" %}
-  <div class="pos-success">
-    <div class="pos-success-title">Payment confirmed</div>
-    <div class="pos-success-subtitle">Receipts sent to printer and fiscal module.</div>
-    <a class="pos-btn pos-btn-primary" href="{% url 'cashier:home' %}">Start new sale</a>
-  </div>
-{% elif payment.status == "failed" %}
+{% if payment.status == "failed" or payment.fiscal_status == "failed" %}
   <div class="pos-alert">
     <div class="pos-success-title">Payment failed</div>
-    <div class="pos-success-subtitle">{{ payment.failure_reason }}</div>
+    <div class="pos-success-subtitle">
+      {{ fiscal_last_error|default:payment.failure_reason|default:"Fiscalization failed." }}
+    </div>
+    {% if can_retry_fiscal %}
+      <form method="post" action="{% url 'cashier:payment_retry_fiscal' payment.public_id %}">
+        {% csrf_token %}
+        <button class="pos-btn pos-btn-outline" type="submit">Retry fiscalization</button>
+      </form>
+    {% endif %}
   </div>
+{% elif payment.status == "captured" %}
+  {% if not ekasa_enabled or payment.fiscal_status == "confirmed" %}
+    <div class="pos-success">
+      <div class="pos-success-title">Payment confirmed</div>
+      <div class="pos-success-subtitle">Payment and fiscal receipt are confirmed.</div>
+      <a class="pos-btn pos-btn-primary" href="{% url 'cashier:home' %}">Start new sale</a>
+    </div>
+  {% else %}
+    <div class="pos-wait-indicator">
+      <div class="pos-spinner"></div>
+      <div>
+        <div class="pos-wait-label">Waiting for fiscal confirmation</div>
+        <div class="pos-wait-note">Do not close this window until eKasa confirms the receipt.</div>
+      </div>
+    </div>
+  {% endif %}
 {% else %}
   <div class="pos-wait-indicator">
     <div class="pos-spinner"></div>
     <div>
-      <div class="pos-wait-label">Waiting for device signal</div>
-      <div class="pos-wait-note">Do not close this window until payment is confirmed.</div>
+      <div class="pos-wait-label">Waiting for fiscal confirmation</div>
+      <div class="pos-wait-note">Do not close this window until eKasa confirms the receipt.</div>
     </div>
   </div>
 {% endif %}

@@ -1,0 +1,63 @@
+<div class="pos-panel-header">
+  <div>
+    <div class="pos-panel-title">Draft Orders</div>
+    <div class="pos-panel-subtitle">Recover or cancel interrupted payments</div>
+  </div>
+</div>
+
+<div class="pos-draft-list">
+  {% for draft in draft_orders %}
+    <div class="pos-draft-card">
+      <div>
+        <div class="pos-draft-title">Order {{ draft.public_id }}</div>
+        <div class="pos-draft-meta">Created {{ draft.created_at|date:"H:i" }} · Total {{ draft.total }}</div>
+      </div>
+      <div class="pos-draft-actions">
+        <form method="post" action="{% url 'cashier:draft_pay' draft.public_id 'cash' %}">
+          {% csrf_token %}
+          <button class="pos-btn pos-btn-secondary" type="submit">Pay cash</button>
+        </form>
+        <form method="post" action="{% url 'cashier:draft_pay' draft.public_id 'card' %}">
+          {% csrf_token %}
+          <button class="pos-btn pos-btn-primary" type="submit">Pay card</button>
+        </form>
+        <form method="post" action="{% url 'cashier:draft_cancel' draft.public_id %}">
+          {% csrf_token %}
+          <button class="pos-btn pos-btn-ghost" type="submit">Cancel</button>
+        </form>
+      </div>
+    </div>
+  {% empty %}
+    <div class="pos-draft-empty">No draft orders.</div>
+  {% endfor %}
+</div>
+
+<div class="pos-panel-header" style="margin-top: 1.1rem;">
+  <div>
+    <div class="pos-panel-title">Paid Orders</div>
+    <div class="pos-panel-subtitle">Fiscal refund for paid receipts</div>
+  </div>
+</div>
+
+{% if refund_error %}
+  <div class="pos-alert pos-alert-warn">{{ refund_error }}</div>
+{% endif %}
+
+<div class="pos-draft-list">
+  {% for paid in paid_orders %}
+    <div class="pos-draft-card">
+      <div>
+        <div class="pos-draft-title">Order {{ paid.public_id }}</div>
+        <div class="pos-draft-meta">Paid {{ paid.updated_at|date:"H:i" }} · Total {{ paid.total }}</div>
+      </div>
+      <div class="pos-draft-actions">
+        <form method="post" action="{% url 'cashier:order_refund' paid.public_id %}">
+          {% csrf_token %}
+          <button class="pos-btn pos-btn-outline" type="submit">Refund</button>
+        </form>
+      </div>
+    </div>
+  {% empty %}
+    <div class="pos-draft-empty">No paid orders.</div>
+  {% endfor %}
+</div>

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
@@ -31,8 +32,21 @@ def capture_payment(*, payment: OrderPayment, actor=None, timeout_s: int = 30) -
     with transaction.atomic():
         payment.status = OrderPayment.Status.CAPTURED
         payment.captured_at = timezone.now()
+        if settings.EKASA_ENABLED:
+            payment.fiscal_status = OrderPayment.FiscalStatus.PENDING
         payment.raw_provider_payload = payload
-        payment.save(update_fields=["status", "captured_at", "raw_provider_payload", "updated_at"])
+        if settings.EKASA_ENABLED:
+            payment.save(
+                update_fields=[
+                    "status",
+                    "captured_at",
+                    "fiscal_status",
+                    "raw_provider_payload",
+                    "updated_at",
+                ]
+            )
+        else:
+            payment.save(update_fields=["status", "captured_at", "raw_provider_payload", "updated_at"])
 
         finalize_paid_order(order=payment.order, actor=actor)
 
@@ -54,6 +68,9 @@ def capture_payment(*, payment: OrderPayment, actor=None, timeout_s: int = 30) -
         # KOT is only needed if the order produced kitchen tickets.
         include_kot = payment.order.kitchen_tickets.exists()
         enqueue_payment_commands(payment=payment, include_kot=include_kot)
+        if settings.EKASA_ENABLED:
+            from apps.payments.tasks import process_device_commands_ekasa
+            process_device_commands_ekasa.delay(org_id=payment.org_id, limit=50)
 
     logger.info(
         "payment_capture_succeeded",

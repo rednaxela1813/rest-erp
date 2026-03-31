@@ -48,7 +48,12 @@ def _build_fiscal_items(*, payment: OrderPayment) -> list[dict]:
     return items
 
 
-def enqueue_payment_commands(*, payment: OrderPayment, include_kot: bool) -> None:
+def enqueue_payment_commands(
+    *,
+    payment: OrderPayment,
+    include_kot: bool,
+    include_payment_capture: bool = True,
+) -> None:
     """
     Enqueue device commands for the Local Agent.
 
@@ -57,10 +62,11 @@ def enqueue_payment_commands(*, payment: OrderPayment, include_kot: bool) -> Non
     2) Local Agent pulls them, executes, then ACK/FAILs
     """
     command_specs = [
-        DeviceCommand.Type.PAYMENT_CAPTURE,
         DeviceCommand.Type.FISCALIZE_SALE,
         DeviceCommand.Type.PRINT_RECEIPT,
     ]
+    if include_payment_capture:
+        command_specs.insert(0, DeviceCommand.Type.PAYMENT_CAPTURE)
 
     if include_kot:
         command_specs.append(DeviceCommand.Type.PRINT_KOT)

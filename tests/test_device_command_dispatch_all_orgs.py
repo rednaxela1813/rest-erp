@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 import pytest
+from django.test import override_settings
 
 from apps.orders.models import Order
 from apps.payments.models import DeviceCommand, OrderPayment
@@ -8,6 +9,7 @@ from apps.payments.tasks import dispatch_device_commands_for_all_orgs
 
 
 @pytest.mark.django_db
+@override_settings(EKASA_ENABLED=False)
 def test_dispatch_device_commands_for_all_orgs_processes_each_org(
     org_factory,
     monkeypatch,

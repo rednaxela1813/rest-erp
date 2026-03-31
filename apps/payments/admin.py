@@ -1,9 +1,11 @@
 from django.contrib import admin
 
+from apps.payments.logic.enqueue_device_commands import _build_fiscal_items
 from .models import (
     CashierSession,
     CashDrawerMovement,
     DeviceCommand,
+    FiscalReceipt,
     OrderPayment,
     PaymentEvent,
     PaymentProviderConfig,
@@ -94,12 +96,33 @@ class DeviceCommandAdmin(admin.ModelAdmin):
         - Reset retries to allow processing again.
         - Clear next_attempt_at to make it eligible immediately.
         """
-        updated = queryset.update(
-            status=DeviceCommand.Status.PENDING,
-            retries=0,
-            last_error="manual_requeue",
-            next_attempt_at=None,
-        )
+        updated = 0
+        for command in queryset.select_related("payment", "order"):
+            if command.command_type == DeviceCommand.Type.FISCALIZE_SALE and command.payment_id:
+                payment = command.payment
+                command.payload = {
+                    "order_id": str(payment.order.public_id),
+                    "payment_id": str(payment.public_id),
+                    "amount": str(payment.amount),
+                    "currency": payment.currency,
+                    "tender": payment.tender,
+                    "items": _build_fiscal_items(payment=payment),
+                }
+            command.status = DeviceCommand.Status.PENDING
+            command.retries = 0
+            command.last_error = "manual_requeue"
+            command.next_attempt_at = None
+            command.save(
+                update_fields=[
+                    "payload",
+                    "status",
+                    "retries",
+                    "last_error",
+                    "next_attempt_at",
+                    "updated_at",
+                ]
+            )
+            updated += 1
         self.message_user(request, f"Re-queued {updated} device commands for retry.")
 
 
@@ -122,3 +145,11 @@ class CashDrawerMovementAdmin(admin.ModelAdmin):
     list_display = ("session", "movement_type", "amount", "actor", "created_at")
     list_filter = ("movement_type",)
     search_fields = ("session__terminal__name", "actor__email")
+
+
+@admin.register(FiscalReceipt)
+class FiscalReceiptAdmin(admin.ModelAdmin):
+    list_display = ("public_id", "receipt_type", "org", "order", "payment", "total", "currency", "created_at")
+    list_filter = ("receipt_type", "currency")
+    search_fields = ("public_id", "payment__public_id", "order__public_id")
+    readonly_fields = ("public_id", "uid", "created_at")

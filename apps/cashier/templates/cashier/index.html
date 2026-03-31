@@ -15,6 +15,12 @@
       <div class="pos-session-meta">
         Opened {{ session.opened_at|date:"H:i" }}
       </div>
+      <div class="pos-session-meta">
+        Cash drawer {{ cash_drawer_total }} {{ currency }}
+      </div>
+      <div class="pos-session-meta">
+        Today sales {{ todays_sales_total }} {{ currency }}
+      </div>
       <div class="pos-session-actions">
         <a class="pos-btn pos-btn-outline" href="{% url 'cashier:kitchen_board' %}">Kitchen</a>
       </div>
@@ -61,11 +67,16 @@
       </div>
     </section>
 
-    <section class="pos-panel pos-panel-cart">
-      <div id="cart-panel">
-        {% include "cashier/partials/cart.html" %}
-      </div>
-    </section>
+    <div class="pos-panel-stack">
+      <section class="pos-panel pos-panel-cart">
+        <div id="cart-panel">
+          {% include "cashier/partials/cart.html" %}
+        </div>
+      </section>
+      <section class="pos-panel pos-panel-drafts">
+        {% include "cashier/partials/drafts.html" %}
+      </section>
+    </div>
   </div>
 </div>
 {% endblock %}

@@ -34,7 +34,16 @@ def dispatch_device_commands(self, org_id: int, limit: int = 50) -> dict:
         return {"published": 0, "command_ids": []}
 
     released = release_due_device_commands(org=org)
-    commands = pull_device_commands(org=org, limit=limit)
+    command_types = None
+    if getattr(settings, "EKASA_ENABLED", False):
+        # In eKasa mode fiscalize_* commands are handled by process_device_commands_ekasa.
+        # Keep stream dispatch only for non-fiscal device commands.
+        command_types = [
+            DeviceCommand.Type.PAYMENT_CAPTURE,
+            DeviceCommand.Type.PRINT_RECEIPT,
+            DeviceCommand.Type.PRINT_KOT,
+        ]
+    commands = pull_device_commands(org=org, limit=limit, command_types=command_types)
     published = publish_device_commands(commands)
 
     return {
@@ -234,6 +243,10 @@ def process_device_commands_ekasa(self, org_id: int, limit: int = 50) -> dict:
             )
         except Exception as exc:
             logger.warning("eKasa payload build failed", extra={"command_id": str(command.public_id), "error": str(exc)})
+            if command.payment_id:
+                command.payment.fiscal_status = OrderPayment.FiscalStatus.FAILED
+                command.payment.failure_reason = str(exc)
+                command.payment.save(update_fields=["fiscal_status", "failure_reason", "updated_at"])
             ack_device_command(
                 command=command,
                 status=DeviceCommand.Status.FAILED,
@@ -246,6 +259,10 @@ def process_device_commands_ekasa(self, org_id: int, limit: int = 50) -> dict:
             response = client.register_cash_register(payload=payload)
         except Exception as exc:
             logger.warning("eKasa request failed", extra={"command_id": str(command.public_id), "error": str(exc)})
+            if command.payment_id:
+                command.payment.fiscal_status = OrderPayment.FiscalStatus.FAILED
+                command.payment.failure_reason = str(exc)
+                command.payment.save(update_fields=["fiscal_status", "failure_reason", "updated_at"])
             ack_device_command(
                 command=command,
                 status=DeviceCommand.Status.FAILED,

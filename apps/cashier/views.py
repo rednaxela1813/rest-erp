@@ -8,6 +8,8 @@ from django.conf import settings
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.db import IntegrityError, transaction
+from django.db.models import Count, Q, Sum, Value
+from django.db.models.functions import Coalesce
 from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -16,10 +18,13 @@ from django.views.decorators.http import require_http_methods
 from rest_framework.exceptions import ValidationError
 
 from apps.orders.logic.finalize_paid_order import finalize_paid_order
+from apps.orders.logic.refund_order import refund_paid_order
 from apps.orders.models import KitchenTicket, Order, OrderItem
 from apps.payments.logic.authorize_payment import authorize_payment
 from apps.payments.logic.capture_payment import capture_payment
-from apps.payments.models import CashDrawerMovement, CashierSession, OrderPayment, Terminal
+from apps.payments.logic.enqueue_device_commands import _build_fiscal_items, enqueue_payment_commands
+from apps.payments.logic.shift import close_shift
+from apps.payments.models import CashDrawerMovement, CashierSession, DeviceCommand, OrderPayment, Terminal
 from apps.products.models import Product
 from config.orgs.models import Organization
 
@@ -29,6 +34,8 @@ SESSION_ORG_ID = "cashier_org_id"
 SESSION_SESSION_ID = "cashier_session_id"
 SESSION_CART = "cashier_cart"
 SESSION_CHECKOUT_IDEMPOTENCY = "cashier_checkout_idempotency"
+SESSION_CHECKOUT_ERROR = "cashier_checkout_error"
+SESSION_REFUND_ERROR = "cashier_refund_error"
 
 
 def _parse_amount(raw_value: str) -> Decimal:
@@ -156,23 +163,32 @@ def _cart_totals(items: List[dict]) -> dict:
 
 
 def _build_order_from_cart(*, org: Organization, cart_items: List[dict]) -> Order:
-    order = Order.objects.create(org=org)
+    if not cart_items:
+        raise ValueError("Cart is empty.")
+
+    # Validate cart item prerequisites before creating the order row.
+    # This prevents leaking empty draft orders when a product config is incomplete.
     for item in cart_items:
         product: Product = item["product"]
         if not product.unit or not product.tax_rate:
             raise ValueError("Product is missing unit or tax rate.")
-        unit_price = item.get("unit_price") or _get_product_unit_price(product)
-        OrderItem.objects.create(
-            order=order,
-            product=product,
-            product_name=product.name,
-            qty=Decimal(item["qty"]),
-            unit=product.unit,
-            unit_price=unit_price,
-            tax_rate=product.tax_rate,
-        )
-    order.recompute_totals()
-    order.save(update_fields=["subtotal", "tax_total", "total", "updated_at"])
+
+    with transaction.atomic():
+        order = Order.objects.create(org=org)
+        for item in cart_items:
+            product: Product = item["product"]
+            unit_price = item.get("unit_price") or _get_product_unit_price(product)
+            OrderItem.objects.create(
+                order=order,
+                product=product,
+                product_name=product.name,
+                qty=Decimal(item["qty"]),
+                unit=product.unit,
+                unit_price=unit_price,
+                tax_rate=product.tax_rate,
+            )
+        order.recompute_totals()
+        order.save(update_fields=["subtotal", "tax_total", "total", "updated_at"])
     return order
 
 
@@ -221,13 +237,48 @@ def _send_receipts(*, order: Order, payment: OrderPayment, session: CashierSessi
     send_fiscal_receipt(order=order, payment=payment, session=session)
 
 
+def _trigger_ekasa_processing_for_org(org_id: int) -> None:
+    if not settings.EKASA_ENABLED:
+        return
+    # Lazy import avoids loading Celery task module at import time for simple requests/tests.
+    from apps.payments.tasks import process_device_commands_ekasa
+    process_device_commands_ekasa.delay(org_id=org_id, limit=50)
+
+
+def _cash_drawer_total(session: CashierSession) -> Decimal:
+    cash_movements = session.cash_movements.aggregate(
+        sale_cash=Coalesce(
+            Sum("amount", filter=Q(movement_type=CashDrawerMovement.Type.SALE_CASH)),
+            Value(Decimal("0.00")),
+        ),
+        cash_in=Coalesce(
+            Sum("amount", filter=Q(movement_type=CashDrawerMovement.Type.CASH_IN)),
+            Value(Decimal("0.00")),
+        ),
+        cash_out=Coalesce(
+            Sum("amount", filter=Q(movement_type=CashDrawerMovement.Type.CASH_OUT)),
+            Value(Decimal("0.00")),
+        ),
+    )
+    return (
+        session.cash_drawer_start
+        + cash_movements["sale_cash"]
+        + cash_movements["cash_in"]
+        - cash_movements["cash_out"]
+    ).quantize(Decimal("0.01"))
+
+
 def _confirm_cash_payment(*, payment: OrderPayment, actor, session: CashierSession) -> OrderPayment:
     if payment.status == OrderPayment.Status.CAPTURED:
         return payment
 
     payment.status = OrderPayment.Status.CAPTURED
     payment.captured_at = timezone.now()
-    payment.save(update_fields=["status", "captured_at", "updated_at"])
+    if settings.EKASA_ENABLED:
+        payment.fiscal_status = OrderPayment.FiscalStatus.PENDING
+        payment.save(update_fields=["status", "captured_at", "fiscal_status", "updated_at"])
+    else:
+        payment.save(update_fields=["status", "captured_at", "updated_at"])
 
     try:
         finalize_paid_order(order=payment.order, actor=actor)
@@ -243,6 +294,13 @@ def _confirm_cash_payment(*, payment: OrderPayment, actor, session: CashierSessi
         movement_type=CashDrawerMovement.Type.SALE_CASH,
         amount=payment.amount,
     )
+    include_kot = payment.order.kitchen_tickets.exists()
+    enqueue_payment_commands(
+        payment=payment,
+        include_kot=include_kot,
+        include_payment_capture=False,
+    )
+    _trigger_ekasa_processing_for_org(payment.org_id)
     _send_receipts(order=payment.order, payment=payment, session=session)
     return payment
 
@@ -304,6 +362,10 @@ def cashier_login(request: HttpRequest) -> HttpResponse:
 @login_required
 @require_http_methods(["POST"])
 def cashier_logout(request: HttpRequest) -> HttpResponse:
+    active_session = _get_active_session(request)
+    if active_session and active_session.status == CashierSession.STATUS_OPEN:
+        closing_cash = _cash_drawer_total(active_session)
+        close_shift(session=active_session, closing_cash=closing_cash)
     logout(request)
     request.session.pop(SESSION_ORG_ID, None)
     request.session.pop(SESSION_SESSION_ID, None)
@@ -428,6 +490,31 @@ def cashier_home(request: HttpRequest) -> HttpResponse:
     cart = _get_cart(request.session)
     items = _cart_items(cart, org)
     totals = _cart_totals(items)
+    draft_orders = (
+        Order.objects
+        .filter(org=org, status=Order.STATUS_DRAFT)
+        .annotate(items_count=Count("items"))
+        .filter(items_count__gt=0)
+        .order_by("-created_at")[:10]
+    )
+    paid_orders = (
+        Order.objects
+        .filter(org=org, status=Order.STATUS_PAID)
+        .order_by("-created_at")[:10]
+    )
+    cash_drawer_total = _cash_drawer_total(session)
+    today = timezone.localdate()
+    todays_sales_total = (
+        OrderPayment.objects
+        .filter(
+            org=org,
+            terminal=session.terminal,
+            status=OrderPayment.Status.CAPTURED,
+            tender__in=[OrderPayment.Tender.CASH, OrderPayment.Tender.CARD],
+            captured_at__date=today,
+        )
+        .aggregate(total=Coalesce(Sum("amount"), Value(Decimal("0.00"))))["total"]
+    ).quantize(Decimal("0.01"))
 
     context = {
         "org": org,
@@ -437,6 +524,12 @@ def cashier_home(request: HttpRequest) -> HttpResponse:
         "cart_count": sum(cart.values()) if cart else 0,
         "totals": totals,
         "currency": settings.DEFAULT_CURRENCY,
+        "draft_orders": draft_orders,
+        "paid_orders": paid_orders,
+        "cash_drawer_total": cash_drawer_total,
+        "todays_sales_total": todays_sales_total,
+        "cart_error": request.session.pop(SESSION_CHECKOUT_ERROR, ""),
+        "refund_error": request.session.pop(SESSION_REFUND_ERROR, ""),
     }
     return render(request, "cashier/index.html", context)
 
@@ -702,6 +795,9 @@ def checkout(request: HttpRequest) -> HttpResponse:
     try:
         order = _build_order_from_cart(org=session.org, cart_items=items)
     except ValueError:
+        request.session[SESSION_CHECKOUT_ERROR] = (
+            "Cannot checkout: one or more products are missing unit or tax rate."
+        )
         return redirect("cashier:home")
 
     try:
@@ -722,6 +818,11 @@ def checkout(request: HttpRequest) -> HttpResponse:
     cart.clear()
     request.session.modified = True
 
+    if tender == OrderPayment.Tender.CASH:
+        _confirm_cash_payment(payment=payment, actor=request.user, session=session)
+    else:
+        _confirm_card_payment(payment=payment, actor=request.user, session=session)
+
     return redirect("cashier:payment_wait", public_id=payment.public_id)
 
 
@@ -740,6 +841,7 @@ def payment_wait(request: HttpRequest, public_id) -> HttpResponse:
         "order": payment.order,
         "currency": settings.DEFAULT_CURRENCY,
         "debug": settings.DEBUG,
+        "ekasa_enabled": settings.EKASA_ENABLED,
     }
     return render(request, "cashier/payment_wait.html", context)
 
@@ -752,12 +854,105 @@ def payment_status(request: HttpRequest, public_id) -> HttpResponse:
         return session
 
     payment = get_object_or_404(OrderPayment, org=session.org, public_id=public_id)
+    if (
+        settings.EKASA_ENABLED
+        and payment.status == OrderPayment.Status.CAPTURED
+        and payment.fiscal_status == OrderPayment.FiscalStatus.PENDING
+    ):
+        # Fallback: process fiscal queue inline during status polling.
+        # This keeps cashier UI responsive even when Celery is delayed.
+        from apps.payments.tasks import process_device_commands_ekasa
+        process_device_commands_ekasa.run(org_id=session.org_id, limit=50)
+        payment.refresh_from_db()
+    failed_fiscal_command = (
+        DeviceCommand.objects
+        .filter(
+            payment=payment,
+            command_type__in=[
+                DeviceCommand.Type.FISCALIZE_SALE,
+                DeviceCommand.Type.FISCALIZE_REFUND,
+                DeviceCommand.Type.FISCALIZE_STORNO,
+            ],
+            status=DeviceCommand.Status.FAILED,
+        )
+        .order_by("-updated_at", "-created_at")
+        .first()
+    )
     context = {
         "payment": payment,
         "order": payment.order,
         "currency": settings.DEFAULT_CURRENCY,
+        "ekasa_enabled": settings.EKASA_ENABLED,
+        "fiscal_last_error": failed_fiscal_command.last_error if failed_fiscal_command else "",
+        "can_retry_fiscal": (
+            settings.EKASA_ENABLED
+            and payment.status == OrderPayment.Status.CAPTURED
+            and failed_fiscal_command is not None
+        ),
     }
     return render(request, "cashier/partials/payment_status.html", context)
+
+
+@login_required
+@require_http_methods(["POST"])
+def payment_retry_fiscal(request: HttpRequest, public_id) -> HttpResponse:
+    session = _require_session_or_redirect(request)
+    if isinstance(session, HttpResponse):
+        return session
+
+    payment = get_object_or_404(OrderPayment, org=session.org, public_id=public_id)
+    if payment.status != OrderPayment.Status.CAPTURED:
+        return redirect("cashier:payment_wait", public_id=payment.public_id)
+
+    sale_command = (
+        DeviceCommand.objects
+        .filter(payment=payment, command_type=DeviceCommand.Type.FISCALIZE_SALE)
+        .order_by("-created_at")
+        .first()
+    )
+    if sale_command is None:
+        include_kot = payment.order.kitchen_tickets.exists()
+        enqueue_payment_commands(
+            payment=payment,
+            include_kot=include_kot,
+            include_payment_capture=False,
+        )
+        sale_command = (
+            DeviceCommand.objects
+            .filter(payment=payment, command_type=DeviceCommand.Type.FISCALIZE_SALE)
+            .order_by("-created_at")
+            .first()
+        )
+
+    if sale_command is not None:
+        sale_command.payload = {
+            "order_id": str(payment.order.public_id),
+            "payment_id": str(payment.public_id),
+            "amount": str(payment.amount),
+            "currency": payment.currency,
+            "tender": payment.tender,
+            "items": _build_fiscal_items(payment=payment),
+        }
+        sale_command.status = DeviceCommand.Status.PENDING
+        sale_command.retries = 0
+        sale_command.last_error = ""
+        sale_command.next_attempt_at = None
+        sale_command.save(
+            update_fields=[
+                "payload",
+                "status",
+                "retries",
+                "last_error",
+                "next_attempt_at",
+                "updated_at",
+            ]
+        )
+
+    payment.fiscal_status = OrderPayment.FiscalStatus.PENDING
+    payment.failure_reason = ""
+    payment.save(update_fields=["fiscal_status", "failure_reason", "updated_at"])
+    _trigger_ekasa_processing_for_org(payment.org_id)
+    return redirect("cashier:payment_wait", public_id=payment.public_id)
 
 
 @login_required
@@ -782,6 +977,77 @@ def payment_confirm_card(request: HttpRequest, public_id) -> HttpResponse:
     payment = get_object_or_404(OrderPayment, org=session.org, public_id=public_id)
     _confirm_card_payment(payment=payment, actor=request.user, session=session)
     return redirect("cashier:payment_wait", public_id=payment.public_id)
+
+
+@login_required
+@require_http_methods(["POST"])
+def draft_pay(request: HttpRequest, public_id, tender: str) -> HttpResponse:
+    session = _require_session_or_redirect(request)
+    if isinstance(session, HttpResponse):
+        return session
+
+    if tender not in (OrderPayment.Tender.CASH, OrderPayment.Tender.CARD):
+        return redirect("cashier:home")
+
+    order = get_object_or_404(Order, org=session.org, public_id=public_id)
+    if order.status != Order.STATUS_DRAFT or not order.items.exists():
+        return redirect("cashier:home")
+
+    order.recompute_totals()
+    order.save(update_fields=["subtotal", "tax_total", "total", "updated_at"])
+
+    idempotency_key = f"draft:{order.public_id}:{tender}"
+    existing = OrderPayment.objects.filter(org=session.org, idempotency_key=idempotency_key).first()
+    if existing:
+        return redirect("cashier:payment_wait", public_id=existing.public_id)
+
+    try:
+        payment = _create_payment(
+            order=order,
+            session=session,
+            tender=tender,
+            idempotency_key=idempotency_key,
+        )
+    except IntegrityError:
+        existing = OrderPayment.objects.filter(org=session.org, idempotency_key=idempotency_key).first()
+        if existing:
+            return redirect("cashier:payment_wait", public_id=existing.public_id)
+        raise
+
+    return redirect("cashier:payment_wait", public_id=payment.public_id)
+
+
+@login_required
+@require_http_methods(["POST"])
+def draft_cancel(request: HttpRequest, public_id) -> HttpResponse:
+    session = _require_session_or_redirect(request)
+    if isinstance(session, HttpResponse):
+        return session
+
+    order = get_object_or_404(Order, org=session.org, public_id=public_id)
+    try:
+        from apps.orders.logic.cancel_draft_order import cancel_draft_order
+        cancel_draft_order(order=order, actor=request.user)
+    except ValidationError:
+        pass
+    return redirect("cashier:home")
+
+
+@login_required
+@require_http_methods(["POST"])
+def order_refund(request: HttpRequest, public_id) -> HttpResponse:
+    session = _require_session_or_redirect(request)
+    if isinstance(session, HttpResponse):
+        return session
+
+    order = get_object_or_404(Order, org=session.org, public_id=public_id)
+    try:
+        refund_paid_order(order=order, actor=request.user)
+        _trigger_ekasa_processing_for_org(session.org_id)
+    except ValidationError as exc:
+        request.session[SESSION_REFUND_ERROR] = str(exc)
+
+    return redirect("cashier:home")
 
 
 @csrf_exempt

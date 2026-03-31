@@ -142,6 +142,7 @@
       <div class="tab-panel active" id="tab-ops">
         <div
           id="dashboard-metrics"
+          data-metrics-url="/dashboard/metrics/?org={{ org.public_id }}"
           hx-get="/dashboard/metrics/?org={{ org.public_id }}"
           hx-trigger="load, every 10s"
           hx-swap="outerHTML"
@@ -175,6 +176,25 @@
           document.getElementById(`tab-${tab.dataset.tab}`).classList.add("active");
         });
       });
+
+      // Fallback polling if htmx is blocked/unavailable.
+      const refreshMetrics = () => {
+        const root = document.getElementById("dashboard-metrics");
+        if (!root) return;
+        const url = root.dataset.metricsUrl;
+        if (!url) return;
+        fetch(url, { credentials: "same-origin" })
+          .then((res) => (res.ok ? res.text() : null))
+          .then((html) => {
+            if (!html) return;
+            root.outerHTML = html;
+          })
+          .catch(() => {});
+      };
+
+      if (!window.htmx) {
+        setInterval(refreshMetrics, 10000);
+      }
     </script>
   </body>
 </html>

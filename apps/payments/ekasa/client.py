@@ -4,6 +4,7 @@ import base64
 import json
 import urllib.request
 import urllib.error
+from decimal import Decimal
 from typing import Any
 
 from django.conf import settings
@@ -31,7 +32,7 @@ class EkasaClient:
         return self._post_json(url=url, payload=payload)
 
     def _post_json(self, *, url: str, payload: dict) -> dict[str, Any]:
-        body = json.dumps(payload).encode("utf-8")
+        body = json.dumps(payload, default=_json_default).encode("utf-8")
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json",
@@ -55,3 +56,9 @@ class EkasaClient:
         if not raw:
             return {}
         return json.loads(raw)
+
+
+def _json_default(value):
+    if isinstance(value, Decimal):
+        return float(value)
+    raise TypeError(f"Object of type {value.__class__.__name__} is not JSON serializable")

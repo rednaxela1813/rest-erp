@@ -88,12 +88,50 @@ a {
   gap: 1.8rem;
 }
 
+.pos-panel-stack {
+  display: grid;
+  gap: 1.6rem;
+}
+
 .pos-panel {
   background: var(--surface-strong);
   border-radius: 26px;
   padding: 1.6rem;
   border: 1px solid rgba(255, 255, 255, 0.8);
   box-shadow: var(--shadow);
+}
+
+.pos-draft-list {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.pos-draft-card {
+  background: rgba(16, 20, 24, 0.04);
+  border-radius: 16px;
+  padding: 0.9rem 1rem;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.pos-draft-title {
+  font-weight: 700;
+}
+
+.pos-draft-meta {
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.pos-draft-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.pos-draft-empty {
+  color: var(--muted);
+  font-size: 0.9rem;
 }
 
 .pos-panel-header {

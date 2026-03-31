@@ -24,8 +24,12 @@ urlpatterns = [
     path("checkout/", views.checkout, name="checkout"),
     path("payments/<uuid:public_id>/", views.payment_wait, name="payment_wait"),
     path("payments/<uuid:public_id>/status/", views.payment_status, name="payment_status"),
+    path("payments/<uuid:public_id>/retry-fiscal/", views.payment_retry_fiscal, name="payment_retry_fiscal"),
     path("payments/<uuid:public_id>/confirm/cash/", views.payment_confirm_cash, name="payment_confirm_cash"),
     path("payments/<uuid:public_id>/confirm/card/", views.payment_confirm_card, name="payment_confirm_card"),
     path("device/payments/<uuid:public_id>/cash/", views.device_cash_confirm, name="device_cash_confirm"),
     path("device/payments/<uuid:public_id>/card/", views.device_card_confirm, name="device_card_confirm"),
+    path("drafts/<uuid:public_id>/pay/<str:tender>/", views.draft_pay, name="draft_pay"),
+    path("drafts/<uuid:public_id>/cancel/", views.draft_cancel, name="draft_cancel"),
+    path("orders/<uuid:public_id>/refund/", views.order_refund, name="order_refund"),
 ]

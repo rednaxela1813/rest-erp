@@ -80,6 +80,7 @@ def build_cash_register_request(*, command, cash_register_code: str) -> dict:
     payments = [
         {
             "type": payment_type,
+            "name": "Cash" if payment_type == "cash" else "Card",
             "amount": _quantize(total, "0.01"),
         }
     ]

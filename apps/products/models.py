@@ -82,13 +82,12 @@ class Product(OrgScopedModel):
         validators=[MinValueValidator(Decimal("0.00")), MaxValueValidator(Decimal("100.00"))],
     )
     
-    unit = models.ForeignKey(
-        "products.Unit",
-        on_delete=models.PROTECT,
-        related_name="products",
-        null=True,
-        blank=True,
-    )
+    unit = models.ForeignKey("products.Unit",
+       on_delete=models.PROTECT,
+       related_name="products",
+       null=True,
+       blank=True,
+   )
     tax_rate = models.ForeignKey(
         "products.TaxRate",
         on_delete=models.PROTECT,
@@ -229,3 +228,7 @@ class ProductAddon(models.Model):
 
     def __str__(self) -> str:
         return f"{self.product.name} - {self.name}"
+
+
+
+
