@@ -6,6 +6,8 @@ from apps.orders.models import Order, OrderItem
 from apps.payments.models import OrderPayment, Terminal
 from apps.products.models import Product, TaxRate, Unit
 
+from apps.inventory.services.receive_stock import receive_stock
+
 
 @pytest.mark.django_db
 def test_open_close_shift_and_report(admin_client, capture_payment_api):
@@ -30,8 +32,10 @@ def test_open_close_shift_and_report(admin_client, capture_payment_api):
         unit=unit,
         tax_rate=tax,
         unit_price=Decimal("5.00"),
-        stock_qty=Decimal("10.000"),
+        
     )
+    
+    receive_stock(org=org, product=product, initial_qty=Decimal("10.000"), unit_cost=Decimal("1.00"), label_code=f"LOT-{product.name.upper()}")
 
     order = Order.objects.create(org=org)
     OrderItem.objects.create(

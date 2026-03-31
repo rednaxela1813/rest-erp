@@ -10,22 +10,15 @@ def test_capture_payment_finalizes_order_and_deducts_stock(admin_client, monkeyp
     from apps.payments.models import OrderPayment
     from apps.payments.logic.capture_payment import capture_payment
     from apps.products.models import Product, Unit, TaxRate
+    from apps.inventory.models import StockLot
+    from apps.inventory.services.receive_stock import receive_stock
 
     order = Order.objects.create(org=org)
 
-    product = Product.objects.create(
-        org=org,
-        name="Cola",
-        status=Product.STATUS_ACTIVE,
-        stock_qty=Decimal("10.000"),
-    )
+    product = Product.objects.create(org=org, name="Cola", status=Product.STATUS_ACTIVE)
     unit = Unit.objects.create(org=org, name="pcs", status=Unit.STATUS_ACTIVE)
-    tax = TaxRate.objects.create(
-        org=org,
-        name="VAT 20",
-        rate=Decimal("20.00"),
-        status=TaxRate.STATUS_ACTIVE,
-    )
+    tax = TaxRate.objects.create(org=org, name="VAT 20", rate=Decimal("20.00"), status=TaxRate.STATUS_ACTIVE)
+    receive_stock(org=org, product=product, initial_qty=Decimal("10.000"), unit_cost=Decimal("1.00"), label_code="LOT-COLA")
 
     OrderItem.objects.create(
         order=order,
@@ -59,8 +52,9 @@ def test_capture_payment_finalizes_order_and_deducts_stock(admin_client, monkeyp
 
     payment.refresh_from_db()
     order.refresh_from_db()
-    product.refresh_from_db()
 
     assert payment.status == OrderPayment.Status.CAPTURED
     assert order.status == Order.STATUS_PAID
-    assert product.stock_qty == Decimal("8.000")
+
+    lot = StockLot.objects.get(org=org, label_code="LOT-COLA")
+    assert lot.remaining_qty == Decimal("8.000")

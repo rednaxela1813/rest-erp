@@ -6,6 +6,8 @@ from apps.orders.models import Order, OrderItem
 from apps.payments.models import DeviceCommand
 from apps.products.models import Product, TaxRate, Unit
 
+from apps.inventory.services.receive_stock import receive_stock
+
 
 @pytest.mark.django_db
 def test_device_commands_pull_and_ack(admin_client, payment_factory, capture_payment_api):
@@ -20,9 +22,10 @@ def test_device_commands_pull_and_ack(admin_client, payment_factory, capture_pay
         unit=unit,
         tax_rate=tax,
         unit_price=Decimal("5.00"),
-        stock_qty=Decimal("10.000"),
+        
         requires_preparation=True,
     )
+    receive_stock(org=org, product=product, initial_qty=Decimal("10.000"), unit_cost=Decimal("1.00"), label_code=f"LOT-{product.name.upper()}")
 
     order = Order.objects.create(org=org)
     OrderItem.objects.create(
@@ -73,8 +76,9 @@ def test_device_command_ack_failed_increments_retries(admin_client, payment_fact
         unit=unit,
         tax_rate=tax,
         unit_price=Decimal("5.00"),
-        stock_qty=Decimal("10.000"),
+        
     )
+    receive_stock(org=org, product=product, initial_qty=Decimal("10.000"), unit_cost=Decimal("1.00"), label_code=f"LOT-{product.name.upper()}")
 
     order = Order.objects.create(org=org)
     OrderItem.objects.create(

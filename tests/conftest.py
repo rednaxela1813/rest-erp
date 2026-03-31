@@ -159,3 +159,26 @@ def capture_payment_api():
         )
 
     return _capture
+
+
+@pytest.fixture
+def lot_factory(db):
+    """
+    Создаёт StockLot для продукта через receive_stock.
+    Используется в тестах где нужна оплата заказа (deduct_stock требует партии).
+    """
+    from decimal import Decimal
+    from apps.inventory.services.receive_stock import receive_stock
+
+    def _make_lot(*, org, product, qty=None, unit_cost=Decimal("1.00")):
+        initial_qty = qty if qty is not None else (product.stock_qty or Decimal("10.000"))
+        lot, _ = receive_stock(
+            org=org,
+            product=product,
+            initial_qty=initial_qty,
+            unit_cost=unit_cost,
+            label_code=f"LOT-{product.name.upper()}-AUTO",
+        )
+        return lot
+
+    return _make_lot

@@ -27,16 +27,18 @@ def _prepare_cashier_session(*, client, org, user) -> CashierSession:
 
 
 def _prepare_product(*, org) -> Product:
+    from apps.inventory.services.receive_stock import receive_stock
     unit = Unit.objects.create(org=org, name="pcs")
     tax_rate = TaxRate.objects.create(org=org, name="VAT 20", rate=Decimal("20.00"))
-    return Product.objects.create(
+    product = Product.objects.create(
         org=org,
         name="Burger",
         unit=unit,
         tax_rate=tax_rate,
         unit_price=Decimal("5.00"),
-        stock_qty=Decimal("10.000"),
     )
+    receive_stock(org=org, product=product, initial_qty=Decimal("10.000"), unit_cost=Decimal("1.00"), label_code="LOT-BURGER")
+    return product
 
 
 @pytest.mark.django_db

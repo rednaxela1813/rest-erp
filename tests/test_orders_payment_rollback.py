@@ -3,111 +3,66 @@ from decimal import Decimal
 
 
 @pytest.mark.django_db
-def test_pay_order_rolls_back_stock_if_error_occurs_midway(admin_client, payment_factory, capture_payment_api, monkeypatch):
+def test_pay_order_rolls_back_stock_if_error_occurs_midway(admin_client, monkeypatch):
     """
     GIVEN:
         - Заказ draft с двумя разными продуктами
-        - Stock у обоих достаточный
+        - У каждого продукта своя партия
 
     WHEN:
-        - Во время оплаты происходит ошибка после первого списания (искусственно)
+        - Во время оплаты ошибка после списания из первой партии
 
     THEN:
-        - transaction.atomic() откатывает всё:
-            * заказ остаётся draft
-            * stock НЕ меняется ни у одного продукта
-
-    ВАЖНО:
-        Django test client по умолчанию "пробрасывает" необработанные исключения наружу,
-        поэтому мы ожидаем RuntimeError через pytest.raises(),
-        а затем проверяем состояние БД.
+        - transaction.atomic() откатывает всё
+        - заказ остаётся draft
+        - остатки в обеих партиях не меняются
     """
-
-    # ----------------------------------------
-    # Arrange
-    # ----------------------------------------
     client, user, org = admin_client
 
-    from apps.orders.models import Order
+    from apps.orders.models import Order, OrderItem
     from apps.products.models import Product, Unit, TaxRate
+    from apps.inventory.models import StockLot
+    from apps.inventory.services.receive_stock import receive_stock
+    from apps.orders.logic.pay_order import pay_order
 
     order = Order.objects.create(org=org)
 
-    # Два разных продукта, stock достаточен для обоих
-    product_a = Product.objects.create(
-        org=org, name="A", status="active", stock_qty=Decimal("10")
-    )
-    product_b = Product.objects.create(
-        org=org, name="B", status="active", stock_qty=Decimal("10")
-    )
-
+    product_a = Product.objects.create(org=org, name="A", status="active")
+    product_b = Product.objects.create(org=org, name="B", status="active")
     unit = Unit.objects.create(org=org, name="pcs")
     tax_rate = TaxRate.objects.create(org=org, name="VAT 20", rate=Decimal("0.20"))
 
-    # Добавляем item на продукт A (qty=2)
-    resp = client.post(
-        f"/api/v1/orders/{order.public_id}/items/",
-        data={
-            "product": str(product_a.public_id),
-            "unit": str(unit.public_id),
-            "tax_rate": str(tax_rate.public_id),
-            "qty": "2",
-            "unit_price": "1.00",
-        },
-        content_type="application/json",
-        HTTP_X_ORG_ID=str(org.public_id),
-    )
-    assert resp.status_code == 201
+    receive_stock(org=org, product=product_a, initial_qty=Decimal("10.000"), unit_cost=Decimal("1.00"), label_code="LOT-A")
+    receive_stock(org=org, product=product_b, initial_qty=Decimal("10.000"), unit_cost=Decimal("1.00"), label_code="LOT-B")
 
-    # Добавляем item на продукт B (qty=3)
-    resp = client.post(
-        f"/api/v1/orders/{order.public_id}/items/",
-        data={
-            "product": str(product_b.public_id),
-            "unit": str(unit.public_id),
-            "tax_rate": str(tax_rate.public_id),
-            "qty": "3",
-            "unit_price": "1.00",
-        },
-        content_type="application/json",
-        HTTP_X_ORG_ID=str(org.public_id),
+    OrderItem.objects.create(
+        order=order, product=product_a, product_name=product_a.name,
+        qty=Decimal("2.000"), unit=unit, unit_price=Decimal("1.00"), tax_rate=tax_rate,
     )
-    assert resp.status_code == 201
+    OrderItem.objects.create(
+        order=order, product=product_b, product_name=product_b.name,
+        qty=Decimal("3.000"), unit=unit, unit_price=Decimal("1.00"), tax_rate=tax_rate,
+    )
 
-    # ----------------------------------------
-    # Monkeypatch: ломаем сохранение второго продукта
-    # ----------------------------------------
-    original_save = Product.save
+    # ломаем второй вызов StockLot.save (первый lot сохранится, второй упадёт)
+    original_save = StockLot.save
     calls = {"count": 0}
 
     def exploding_save(self, *args, **kwargs):
-        """
-        Первый save проходит (спишем product_a).
-        Второй save падает исключением (на product_b).
-        """
         calls["count"] += 1
         if calls["count"] == 2:
             raise RuntimeError("DB write failed")
         return original_save(self, *args, **kwargs)
 
-    monkeypatch.setattr(Product, "save", exploding_save)
+    monkeypatch.setattr(StockLot, "save", exploding_save)
 
-    # ----------------------------------------
-    # Act: пытаемся оплатить
-    # ----------------------------------------
-    # Django test client пробрасывает необработанные исключения наружу,
-    # поэтому ожидаем RuntimeError вместо проверки HTTP-кода.
-    payment = payment_factory(order=order, org=org, amount=Decimal("5.00"))
     with pytest.raises(RuntimeError, match="DB write failed"):
-        capture_payment_api(client, payment)
+        pay_order(order=order)
 
-    # ----------------------------------------
-    # Assert: откат (rollback)
-    # ----------------------------------------
     order.refresh_from_db()
     assert order.status == Order.STATUS_DRAFT
 
-    product_a.refresh_from_db()
-    product_b.refresh_from_db()
-    assert product_a.stock_qty == Decimal("10")
-    assert product_b.stock_qty == Decimal("10")
+    lot_a = StockLot.objects.get(org=org, label_code="LOT-A")
+    lot_b = StockLot.objects.get(org=org, label_code="LOT-B")
+    assert lot_a.remaining_qty == Decimal("10.000")
+    assert lot_b.remaining_qty == Decimal("10.000")

@@ -74,21 +74,21 @@ def finalize_paid_order(*, order: Order, actor=None) -> Order:
         )
         products_map = {p.id: p for p in locked_products}
 
-        for pid, total_qty in qty_by_product_id.items():
-            p = products_map[pid]
-            if p.stock_qty is None:
-                raise ValidationError({"order": "Stock quantity missing for product."})
-            if p.stock_qty < total_qty:
-                raise ValidationError({"order": "Insufficient stock."})
+        from apps.inventory.exceptions import InsufficientStock
+        from apps.inventory.services.deduct_stock import deduct_stock
 
         for pid, total_qty in qty_by_product_id.items():
             p = products_map[pid]
-            p.stock_qty = p.stock_qty - total_qty
-
-            fields = ["stock_qty"]
-            if "updated_at" in [f.name for f in p._meta.fields]:
-                fields.append("updated_at")
-            p.save(update_fields=fields)
+            try:
+                deduct_stock(
+                    org=order.org,
+                    product=p,
+                    quantity=total_qty,
+                    reason="order_paid",
+                    comment=str(order.public_id),
+                )
+            except InsufficientStock as e:
+                raise ValidationError({"order": str(e)})
 
         old_status = order.status
         order.status = Order.STATUS_PAID

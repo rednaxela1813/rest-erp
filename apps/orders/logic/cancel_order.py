@@ -80,16 +80,17 @@ def cancel_order(*, order: Order, actor=None) -> Order:
         )
         products_map = {p.id: p for p in locked_products}
 
+        from apps.inventory.services.deduct_stock import restore_stock
+
         for pid, total_qty in qty_by_product_id.items():
             p = products_map[pid]
-            if p.stock_qty is None:
-                continue
-            p.stock_qty = p.stock_qty + total_qty
-
-            fields = ["stock_qty"]
-            if "updated_at" in [f.name for f in p._meta.fields]:
-                fields.append("updated_at")
-            p.save(update_fields=fields)
+            restore_stock(
+                org=locked_order.org,
+                product=p,
+                quantity=total_qty,
+                reason="order_cancelled",
+                comment=str(locked_order.public_id),
+            )
 
         old_status = locked_order.status
         locked_order.status = Order.STATUS_CANCELLED
