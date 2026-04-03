@@ -171,7 +171,7 @@ def lot_factory(db):
     from apps.inventory.services.receive_stock import receive_stock
 
     def _make_lot(*, org, product, qty=None, unit_cost=Decimal("1.00")):
-        initial_qty = qty if qty is not None else (product.stock_qty or Decimal("10.000"))
+        initial_qty = qty if qty is not None else Decimal("10.000")
         lot, _ = receive_stock(
             org=org,
             product=product,

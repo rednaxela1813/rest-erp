@@ -98,7 +98,17 @@ def _get_products(org: Organization | None, query: str = ""):
     if not org:
         return Product.objects.none()
 
-    qs = Product.objects.filter(org=org, status=Product.STATUS_ACTIVE).order_by("name")
+    qs = (
+        Product.objects
+        .filter(org=org, status=Product.STATUS_ACTIVE)
+        .annotate(
+            stock_qty_annotated=Sum(
+                "stock_lots__remaining_qty",
+                filter=Q(stock_lots__status="active"),
+            )
+        )
+        .order_by("name")
+    )
     if query:
         qs = qs.filter(name__icontains=query)
     return qs

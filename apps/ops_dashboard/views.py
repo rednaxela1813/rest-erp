@@ -4,7 +4,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from datetime import date, datetime, timedelta
 
-from django.db.models import Count, Sum
+from django.db.models import Count, Q, Sum
 from django.shortcuts import render, redirect
 from django.utils import timezone
 
@@ -168,8 +168,15 @@ def _get_management_tables(org, start_dt, end_dt) -> dict:
 
     stock_levels = (
         Product.objects
-        .filter(org=org, stock_qty__isnull=False)
-        .order_by("stock_qty", "name")[:50]
+        .filter(org=org)
+        .annotate(
+            stock_qty_annotated=Sum(
+                "stock_lots__remaining_qty",
+                filter=Q(stock_lots__status="active"),
+            )
+        )
+        .filter(stock_qty_annotated__isnull=False)
+        .order_by("stock_qty_annotated", "name")[:50]
     )
 
     return {

@@ -21,8 +21,6 @@ def deduct_stock(
     списывает нужное количество, создаёт StockMovement(OUT) для каждой
     затронутой партии.
 
-    Параллельно обновляет product.stock_qty как кеш-совместимость.
-
     Бросает InsufficientStock если суммарного остатка недостаточно.
     """
     with transaction.atomic():
@@ -68,14 +66,6 @@ def deduct_stock(
             )
             movements.append(movement)
 
-        # кеш-совместимость: обновляем плоский остаток на продукте
-        if product.stock_qty is not None:
-            product.stock_qty = max(
-                Decimal("0.000"),
-                product.stock_qty - quantity,
-            )
-            product.save(update_fields=["stock_qty", "updated_at"])
-
     return movements
 
 
@@ -90,11 +80,7 @@ def restore_stock(
     """
     Возврат остатка при отмене заказа.
 
-    MVP: обновляет только product.stock_qty.
-    Партионный возврат (в какую партию вернуть?) — отдельная задача,
-    решается после введения GoodsReceipt и политики возвратов.
+    Партионный возврат (в какую партию вернуть?) пока не реализован.
     """
     with transaction.atomic():
-        if product.stock_qty is not None:
-            product.stock_qty = product.stock_qty + quantity
-            product.save(update_fields=["stock_qty", "updated_at"])
+        return None

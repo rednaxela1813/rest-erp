@@ -21,7 +21,6 @@ def _make_product(*, org, name="Cola") -> Product:
         unit=unit,
         tax_rate=tax_rate,
         unit_price=Decimal("2.50"),
-        stock_qty=Decimal("100.000"),
     )
 
 

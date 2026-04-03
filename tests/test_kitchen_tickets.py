@@ -33,7 +33,6 @@ def test_paid_order_with_prep_product_creates_kitchen_ticket(
         name="Pizza",
         status=Product.STATUS_ACTIVE,
         requires_preparation=True,
-        stock_qty=None,
     )
     unit = Unit.objects.create(org=org, name="pcs", status=Unit.STATUS_ACTIVE)
     tax = TaxRate.objects.create(org=org, name="VAT 20", rate=Decimal("20.00"), status=TaxRate.STATUS_ACTIVE)

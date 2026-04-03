@@ -3,6 +3,7 @@ from decimal import Decimal
 import pytest
 
 from apps.orders.models import Order, OrderItem
+from apps.inventory.services.receive_stock import receive_stock
 from apps.payments.models import DeviceCommand
 from apps.products.models import Product, TaxRate, Unit
 
@@ -20,9 +21,9 @@ def test_capture_payment_enqueues_device_commands_with_dedup(admin_client, payme
         unit=unit,
         tax_rate=tax,
         unit_price=Decimal("5.00"),
-        stock_qty=Decimal("10.000"),
         requires_preparation=True,
     )
+    receive_stock(org=org, product=product, initial_qty=Decimal("10.000"), unit_cost=Decimal("1.00"))
 
     order = Order.objects.create(org=org)
     OrderItem.objects.create(

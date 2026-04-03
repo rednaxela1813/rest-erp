@@ -25,18 +25,13 @@ class ProductAdmin(admin.ModelAdmin):
         "unit_price",
         "unit",
         "tax_rate",
-        "stock_qty",
+       
     )
     search_fields = ("name", "barcode", "org__name")
     list_filter = ("status", "tax_rate", "is_bundle", "requires_preparation")
     inlines = [BundleItemInline]
 
-    def save_model(self, request, obj, form, change):
-        if obj.requires_preparation:
-            obj.stock_qty = None
-        elif obj.stock_qty is None:
-            obj.stock_qty = Decimal("0.000")
-        super().save_model(request, obj, form, change)
+    
 
     def save_related(self, request, form, formsets, change):
         super().save_related(request, form, formsets, change)

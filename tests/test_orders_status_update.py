@@ -40,16 +40,17 @@ def test_admin_can_set_order_status_to_paid(admin_client, payment_factory, captu
     assert order.status == Order.STATUS_PAID
     
 
-def test_admin_cannot_set_order_status_to_paid_directly(admin_client):
+def test_admin_cannot_set_order_status_to_paid_directly(admin_client, lot_factory):
     client, user, org = admin_client
     from apps.orders.models import Order
     from apps.products.models import Product, Unit, TaxRate
 
     order = Order.objects.create(org=org)
 
-    product = Product.objects.create(org=org, name="Burger", status=Product.STATUS_ACTIVE, stock_qty=Decimal("10.000"))
+    product = Product.objects.create(org=org, name="Burger", status=Product.STATUS_ACTIVE)
     unit = Unit.objects.create(org=org, name="pcs", status=Unit.STATUS_ACTIVE)
     tax = TaxRate.objects.create(org=org, name="DPH 20%", rate=Decimal("20.00"), status=TaxRate.STATUS_ACTIVE)
+    lot_factory(org=org, product=product, qty=Decimal("10.000"))
 
     resp_item = client.post(
         f"/api/v1/orders/{order.public_id}/items/",

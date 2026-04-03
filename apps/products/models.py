@@ -3,6 +3,7 @@ import uuid
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.db.models import Sum
 
 from config.orgs.models import OrgScopedModel
 from decimal import Decimal
@@ -96,13 +97,19 @@ class Product(OrgScopedModel):
         blank=True,
     )
     unit_price = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
-    stock_qty = models.DecimalField(
-        max_digits=12,
-        decimal_places=3,
-        null=True,
-        blank=True,
-    )
+    # stock_qty = models.DecimalField(
+    #     max_digits=12,
+    #     decimal_places=3,
+    #     null=True,
+    #     blank=True,
+    # )
     
+   # food_cost_percent = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Целевой food cost в процентах, например 30.00") TODO: Product
+    #- добавить food_cost_percent (DecimalField, на уровне карточки)
+#- добавить price_rounding_step (DecimalField, на уровне карточки)  
+#- unit_price становится вычисляемым (пересчитывается при новой поставке)
+#- аналитика food cost по ресторану в целом — отдельная задача#
+   # price_rounding_step = models.DecimalField(max_digits=4, decimal_places=2, null=True, blank=True, help_text="Шаг округления цены, например 0.10 или 0.20")
     class Meta:
         ordering = ["id"]
         constraints = [
@@ -120,6 +127,13 @@ class Product(OrgScopedModel):
 
     def __str__(self) -> str:
         return self.name
+
+    @property
+    def stock_qty(self):
+        annotated_value = getattr(self, "stock_qty_annotated", None)
+        if annotated_value is not None:
+            return annotated_value
+        return self.stock_lots.filter(status="active").aggregate(total=Sum("remaining_qty"))["total"]
 
     def recompute_bundle_price(self) -> Decimal:
         if not self.is_bundle:
@@ -228,7 +242,6 @@ class ProductAddon(models.Model):
 
     def __str__(self) -> str:
         return f"{self.product.name} - {self.name}"
-
 
 
 
