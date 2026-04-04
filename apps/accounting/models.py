@@ -24,6 +24,7 @@ class AccountingEntry(OrgScopedModel):
     amount     = models.DecimalField(max_digits=12, decimal_places=2)
     tax_amount = models.DecimalField(max_digits=12, decimal_places=2)
     currency   = models.CharField(max_length=3, default="EUR")
+    partner = models.ForeignKey("partners.Partner", on_delete=models.PROTECT, null=True, blank=True, related_name="accounting_entries"    )
     note = models.TextField(blank=True, default="")
     transaction_date = models.DateField()
 

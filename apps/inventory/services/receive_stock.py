@@ -1,3 +1,4 @@
+# backend/apps/inventory/services/receive_stock.py
 from decimal import Decimal
 from datetime import datetime
 
@@ -5,6 +6,8 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.inventory.models import StockLot, StockMovement
+from apps.accounting.logic.record_stock_receipt import record_stock_receipt
+
 
 
 def receive_stock(
@@ -41,7 +44,11 @@ def receive_stock(
             expires_at=expires_at,
             received_at=received_at or timezone.now(),
             status=StockLot.Status.ACTIVE,
+            
+            
         )
+
+       
 
         movement = StockMovement.objects.create(
             org=org,
@@ -52,5 +59,7 @@ def receive_stock(
             unit_cost_snapshot=unit_cost,
             comment=comment,
         )
+        
+        record_stock_receipt(lot=lot)  # связать с функцией, которая создаёт запись в бухгалтерии
 
     return lot, movement
