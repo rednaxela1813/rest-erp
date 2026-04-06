@@ -10,6 +10,8 @@ from apps.orders.models import Order
 
 from apps.accounting.logic.record_stock_out import record_stock_out
 
+from apps.products.models import Product
+
 
 def finalize_paid_order(*, order: Order, actor=None) -> Order:
     """
@@ -33,10 +35,13 @@ def finalize_paid_order(*, order: Order, actor=None) -> Order:
             raise ValidationError({"status": ["Invalid status transition."]})
 
         items_qs = order.items.select_related("product").prefetch_related(
-            "product__bundle_items__component"
+            "product__bundle_items__component", "product__recipe__ingredients__product"
         )
         if not items_qs.exists():
             raise ValidationError({"order": "Cannot pay order without items."})
+        
+         
+
 
         qty_by_product_id: dict[int, Decimal] = {}
         kitchen_qty_by_product_id: dict[int, Decimal] = {}
@@ -59,6 +64,22 @@ def finalize_paid_order(*, order: Order, actor=None) -> Order:
                         qty_by_product_id[component.id] = qty_by_product_id.get(
                             component.id, Decimal("0")
                         ) + component_qty
+            elif product.product_type == Product.PRODUCT_TYPE_PREPARED:
+                recipe = getattr(product, "recipe", None)
+                if recipe:
+                    for ingredient in recipe.ingredients.all():
+                        ingredient_product = ingredient.product
+                        if not ingredient_product:
+                            continue
+                        ingredient_qty = item_qty * ingredient.quantity
+                        if ingredient_product.requires_preparation:
+                            kitchen_qty_by_product_id[ingredient_product.id] = kitchen_qty_by_product_id.get(
+                                ingredient_product.id, Decimal("0")
+                            ) + ingredient_qty
+                        else:
+                            qty_by_product_id[ingredient_product.id] = qty_by_product_id.get(
+                                ingredient_product.id, Decimal("0")
+                            ) + ingredient_qty
             else:
                 if product.requires_preparation:
                     kitchen_qty_by_product_id[product.id] = kitchen_qty_by_product_id.get(
@@ -69,7 +90,7 @@ def finalize_paid_order(*, order: Order, actor=None) -> Order:
                         product.id, Decimal("0")
                     ) + item_qty
 
-        from apps.products.models import Product
+        
 
         locked_products = Product.objects.select_for_update().filter(
             id__in=list(qty_by_product_id.keys())

@@ -70,10 +70,21 @@ class Product(OrgScopedModel):
         (STATUS_ACTIVE, "Active"),
         (STATUS_ARCHIVED, "Archived"),
     )
+    
+    PRODUCT_TYPE_SIMPLE     = "simple"
+    PRODUCT_TYPE_INGREDIENT = "ingredient"
+    PRODUCT_TYPE_PREPARED   = "prepared"
+
+    PRODUCT_TYPE_CHOICES = (
+        (PRODUCT_TYPE_SIMPLE,     "Simple"),
+        (PRODUCT_TYPE_INGREDIENT, "Ingredient"),
+        (PRODUCT_TYPE_PREPARED,   "Prepared"),
+    )
 
     name = models.CharField(max_length=255)
     barcode = models.CharField(max_length=64, blank=True, default="", db_index=True)
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_ACTIVE)
+    product_type = models.CharField(max_length=16, choices=PRODUCT_TYPE_CHOICES, default=PRODUCT_TYPE_SIMPLE)
     is_bundle = models.BooleanField(default=False)
     requires_preparation = models.BooleanField(default=False)
     bundle_discount_percent = models.DecimalField(
