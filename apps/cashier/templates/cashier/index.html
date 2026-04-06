@@ -19,15 +19,20 @@
         Cash drawer {{ cash_drawer_total }} {{ currency }}
       </div>
       <div class="pos-session-meta">
-        Today sales {{ todays_sales_total }} {{ currency }}
+        Shift sales {{ todays_sales_total }} {{ currency }}
       </div>
       <div class="pos-session-actions">
         <a class="pos-btn pos-btn-outline" href="{% url 'cashier:kitchen_board' %}">Kitchen</a>
       </div>
-      <form method="post" action="{% url 'cashier:logout' %}">
-        {% csrf_token %}
-        <button class="pos-btn pos-btn-ghost" type="submit">Log out</button>
-      </form>
+      
+        {% comment %} Кнопка закрытия смены ведёт на страницу Z-отчёта (GET session/close/),
+        а не сразу разлогинивает. Кассир сначала видит итоги смены,
+        затем явно подтверждает закрытие кнопкой на той странице.
+
+        Старый вариант (прямой logout) оставлен в cashier_logout() и используется
+        со страницы открытия смены (session_open.html) как аварийный выход. {% endcomment %}
+      
+      <a class="pos-btn pos-btn-ghost" href="{% url 'cashier:session_close' %}">Close shift</a>
     </div>
   </header>
 

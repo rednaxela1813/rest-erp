@@ -128,6 +128,15 @@ class Product(OrgScopedModel):
     def __str__(self) -> str:
         return self.name
 
+    def clean(self) -> None:
+        super().clean()
+        if self.unit and self.unit.org_id != self.org_id:
+            raise ValidationError({"unit": "Unit must belong to the same organization as the product."})
+        if self.tax_rate and self.tax_rate.org_id != self.org_id:
+            raise ValidationError(
+                {"tax_rate": "Tax rate must belong to the same organization as the product."}
+            )
+
     @property
     def stock_qty(self):
         annotated_value = getattr(self, "stock_qty_annotated", None)
@@ -242,6 +251,5 @@ class ProductAddon(models.Model):
 
     def __str__(self) -> str:
         return f"{self.product.name} - {self.name}"
-
 
 

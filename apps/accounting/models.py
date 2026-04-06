@@ -12,7 +12,12 @@ class AccountingEntry(OrgScopedModel):
         SALE          = "sale",          "Продажа"
         REFUND        = "refund",        "Возврат"
         STOCK_RECEIPT = "stock_receipt", "Приход товара"
+        STOCK_OUT     = "stock_out",     "Расход товара"
         PAYMENT_OUT   = "payment_out",   "Оплата поставщику"
+        SALE_CASH     = "sale_cash",    "Продажа наличными"
+        SALE_CARD     = "sale_card",    "Продажа картой"
+        CASH_IN       = "cash_in",      "Внесение наличных"
+        CASH_OUT      = "cash_out",     "Изъятие наличных"
         
     class ExportStatus(models.TextChoices):
         PENDING  = "pending",  "Ожидает экспорта"

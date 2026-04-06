@@ -11,6 +11,8 @@ from apps.payments.models import FiscalReceipt, OrderPayment
 from apps.payments.providers import registry
 from apps.orders.logic.finalize_paid_order import finalize_paid_order
 
+from apps.accounting.logic.record_sale import record_sale
+
 logger = structlog.get_logger(__name__)
 
 
@@ -49,6 +51,10 @@ def capture_payment(*, payment: OrderPayment, actor=None, timeout_s: int = 30) -
             payment.save(update_fields=["status", "captured_at", "raw_provider_payload", "updated_at"])
 
         finalize_paid_order(order=payment.order, actor=actor)
+        
+        record_sale(order=payment.order, tender=payment.tender)  # связать с функцией, которая создаёт запись в бухгалтерии
+        
+
 
         if payment.tender == OrderPayment.Tender.CARD:
             FiscalReceipt.objects.get_or_create(

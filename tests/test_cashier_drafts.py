@@ -147,7 +147,7 @@ def test_cashier_home_shows_cash_drawer_total(client, user_factory, org_factory)
 
 
 @pytest.mark.django_db
-def test_cashier_home_shows_todays_sales_total(client, user_factory, org_factory):
+def test_cashier_home_shows_shift_sales_total(client, user_factory, org_factory):
     user = user_factory(email="cashier@example.com")
     org = org_factory(name="Cashier Org")
     OrganizationMember.objects.create(org=org, user=user, role="member")
@@ -157,59 +157,35 @@ def test_cashier_home_shows_todays_sales_total(client, user_factory, org_factory
     order_1 = Order.objects.create(org=org)
     order_2 = Order.objects.create(org=org)
     order_3 = Order.objects.create(org=org)
-    order_4 = Order.objects.create(org=org)
 
+    # Считается: наличные в текущей смене
     OrderPayment.objects.create(
-        org=org,
-        order=order_1,
-        terminal=session.terminal,
+        org=org, order=order_1, terminal=session.terminal,
         tender=OrderPayment.Tender.CASH,
         status=OrderPayment.Status.CAPTURED,
-        amount=Decimal("10.00"),
-        currency="EUR",
-        provider="manual",
+        amount=Decimal("10.00"), currency="EUR", provider="manual",
         captured_at=timezone.now(),
     )
+    # Считается: карта в текущей смене
     OrderPayment.objects.create(
-        org=org,
-        order=order_2,
-        terminal=session.terminal,
+        org=org, order=order_2, terminal=session.terminal,
         tender=OrderPayment.Tender.CARD,
         status=OrderPayment.Status.CAPTURED,
-        amount=Decimal("7.50"),
-        currency="EUR",
-        provider="manual",
+        amount=Decimal("7.50"), currency="EUR", provider="manual",
         captured_at=timezone.now(),
     )
-    # Not counted: online tender.
+    # Не считается: платёж ДО открытия смены
     OrderPayment.objects.create(
-        org=org,
-        order=order_3,
-        terminal=session.terminal,
-        tender=OrderPayment.Tender.ONLINE,
-        status=OrderPayment.Status.CAPTURED,
-        amount=Decimal("100.00"),
-        currency="EUR",
-        provider="manual",
-        captured_at=timezone.now(),
-    )
-    # Not counted: failed status.
-    OrderPayment.objects.create(
-        org=org,
-        order=order_4,
-        terminal=session.terminal,
+        org=org, order=order_3, terminal=session.terminal,
         tender=OrderPayment.Tender.CASH,
-        status=OrderPayment.Status.FAILED,
-        amount=Decimal("5.00"),
-        currency="EUR",
-        provider="manual",
-        captured_at=timezone.now(),
+        status=OrderPayment.Status.CAPTURED,
+        amount=Decimal("50.00"), currency="EUR", provider="manual",
+        captured_at=session.opened_at - timezone.timedelta(hours=1),
     )
 
     resp = client.get("/cashier/")
     assert resp.status_code == 200
-    assert b"Today sales 17.50" in resp.content
-
+    assert b"Shift sales 17.50" in resp.content
 
 @pytest.mark.django_db
 def test_logout_closes_open_shift_with_current_cash(client, user_factory, org_factory):

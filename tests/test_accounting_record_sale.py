@@ -53,10 +53,10 @@ def test_record_sale_creates_entry(org_factory):
     org = org_factory()
     order = _make_paid_order(org=org)
 
-    entry = record_sale(order=order)
+    entry = record_sale(order=order, tender="cash")
 
     assert entry.pk is not None
-    assert entry.entry_type == AccountingEntry.EntryType.SALE
+    assert entry.entry_type == AccountingEntry.EntryType.SALE_CASH
     assert entry.amount == order.total
     assert entry.tax_amount == order.tax_total
     assert entry.org == org
@@ -67,7 +67,7 @@ def test_record_sale_export_status_is_pending(org_factory):
     org = org_factory()
     order = _make_paid_order(org=org)
 
-    entry = record_sale(order=order)
+    entry = record_sale(order=order, tender="cash")
 
     assert entry.export_status == AccountingEntry.ExportStatus.PENDING
     assert entry.exported_at is None
@@ -79,8 +79,8 @@ def test_record_sale_is_idempotent(org_factory):
     org = org_factory()
     order = _make_paid_order(org=org)
 
-    entry1 = record_sale(order=order)
-    entry2 = record_sale(order=order)
+    entry1 = record_sale(order=order, tender="cash")
+    entry2 = record_sale(order=order, tender="cash")
 
     assert entry1.pk == entry2.pk
     assert AccountingEntry.objects.filter(org=org).count() == 1
@@ -93,7 +93,7 @@ def test_record_sale_links_to_order(org_factory):
     org = org_factory()
     order = _make_paid_order(org=org)
 
-    entry = record_sale(order=order)
+    entry = record_sale(order=order, tender="cash")
 
     ct = ContentType.objects.get_for_model(Order)
     assert entry.source_content_type == ct
@@ -108,8 +108,8 @@ def test_record_sale_org_isolation(org_factory):
     order_a = _make_paid_order(org=org_a)
     order_b = _make_paid_order(org=org_b)
 
-    record_sale(order=order_a)
-    record_sale(order=order_b)
+    record_sale(order=order_a, tender="cash")
+    record_sale(order=order_b, tender="cash")
 
     assert AccountingEntry.objects.filter(org=org_a).count() == 1
     assert AccountingEntry.objects.filter(org=org_b).count() == 1

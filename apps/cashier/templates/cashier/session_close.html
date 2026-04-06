@@ -1,0 +1,134 @@
+{% extends "cashier/base.html" %}
+
+{% block content %}
+
+  {% comment %} Z-отчёт и подтверждение закрытия смены.
+
+  Страница работает в двух режимах:
+    GET  — показывает отчёт по смене, кассир его читает.
+    POST — кассир нажимает "Close shift", смена закрывается, происходит logout.
+
+  Данные передаются из views.session_close():
+    session          — объект CashierSession
+    org              — организация
+    report           — словарь из shift_report(): payments_total, tax_total,
+                       by_tender {cash: ..., card: ...}, by_tax_rate [{rate, tax_total}]
+    cash_drawer_total — текущий остаток в кассовом ящике (Decimal)
+    currency         — строка валюты из настроек (например "EUR") {% endcomment %}
+
+<div class="pos-shell pos-shell-narrow">
+  <header class="pos-header">
+    <div>
+      <div class="pos-brand">Burger Ops</div>
+      <div class="pos-subtitle">Z-report · end of shift</div>
+    </div>
+    <div class="pos-session-card">
+      <div class="pos-session-title">{{ org.name }}</div>
+      <div class="pos-session-meta">Terminal {{ session.terminal.name }}</div>
+      {% comment %} Время открытия смены — кассир видит когда смена началась {% endcomment %}
+      <div class="pos-session-meta">Opened {{ session.opened_at|date:"d.m.Y H:i" }}</div>
+    </div>
+  </header>
+
+  <section class="pos-panel">
+
+    {# ── Итоги продаж ────────────────────────────────────────────────────── #}
+    <div class="pos-report-section">
+      <div class="pos-report-title">Sales totals</div>
+
+      {% comment %} Общий оборот — сумма всех CAPTURED платежей за смену {% endcomment %}
+      <div class="pos-report-row pos-report-row-total">
+        <span>Total revenue</span>
+        <span>{{ report.payments_total }} {{ currency }}</span>
+      </div>
+
+      {% comment %} НДС включён в цену (VAT-inclusive), поэтому это вычтенная сумма налога {% endcomment %}
+      <div class="pos-report-row">
+        <span>VAT total</span>
+        <span>{{ report.tax_total }} {{ currency }}</span>
+      </div>
+    </div>
+
+    {% comment %} {# ── Разбивка по способу оплаты ──────────────────────────────────────── #} {% endcomment %}
+    {% comment %} {# by_tender — словарь {tender: amount}, например {"cash": 120.00, "card": 80.00} #} {% endcomment %}
+    {% if report.by_tender %}
+    <div class="pos-report-section">
+      <div class="pos-report-title">By payment type</div>
+      {% for tender, amount in report.by_tender.items %}
+      <div class="pos-report-row">
+        {% comment %} capfirst превращает "cash" в "Cash", "card" в "Card" {% endcomment %}
+        <span>{{ tender|capfirst }}</span>
+        <span>{{ amount }} {{ currency }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% comment %} {# ── Разбивка по ставкам НДС ─────────────────────────────────────────── #} {% endcomment %}
+    {% comment %} {# by_tax_rate — список [{rate: "20.00", tax_total: 33.33}, ...] #} {% endcomment %}
+    {% comment %} {# Нужен для налоговой отчётности — каждая ставка отображается отдельно #} {% endcomment %}
+    {% if report.by_tax_rate %}
+    <div class="pos-report-section">
+      <div class="pos-report-title">By VAT rate</div>
+      {% for row in report.by_tax_rate %}
+      <div class="pos-report-row">
+        <span>VAT {{ row.rate }}%</span>
+        <span>{{ row.tax_total }} {{ currency }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% comment %} {# ── Кассовый ящик ───────────────────────────────────────────────────── #} {% endcomment %}
+    {% comment %} {# Показываем начальный остаток и текущий (после всех операций за смену) #} {% endcomment %}
+    <div class="pos-report-section">
+      <div class="pos-report-title">Cash drawer</div>
+
+      {% comment %} {# cash_drawer_start — сумма внесённая при открытии смены #} {% endcomment %}
+      <div class="pos-report-row">
+        <span>Opening float</span>
+        <span>{{ session.cash_drawer_start }} {{ currency }}</span>
+      </div>
+
+      {% comment %} {# cash_drawer_total — вычисляется как: opening + cash_sales + cash_in - cash_out #} {% endcomment %}
+      {% comment %} {# Это число будет записано в session.cash_drawer_end при POST #} {% endcomment %}
+      <div class="pos-report-row pos-report-row-total">
+        <span>Current balance</span>
+        <span>{{ cash_drawer_total }} {{ currency }}</span>
+      </div>
+    </div>
+
+    {% comment %} {# ── Предупреждение перед закрытием ──────────────────────────────────── #} {% endcomment %}
+    <div class="pos-wait-indicator" style="margin-top: 2rem;">
+      <div>
+        <div class="pos-wait-label">Review the report before closing</div>
+        <div class="pos-wait-note">
+          After closing the shift, this data will be saved and you will be logged out.
+        </div>
+      </div>
+    </div>
+
+    {% comment %} {# ── Кнопки действий ─────────────────────────────────────────────────── #} {% endcomment %}
+    <div class="pos-debug-actions" style="margin-top: 1.5rem;">
+
+      {% comment %}
+        POST на этот же URL запускает close_shift() + logout().
+        CSRF-токен обязателен для всех POST-форм в Django.
+      {% endcomment %}
+      <form method="post">
+        {% csrf_token %}
+        <button class="pos-btn pos-btn-primary" type="submit">
+          Close shift and log out
+        </button>
+      </form>
+
+      {% comment %} Кассир может передумать и вернуться к работе без закрытия смены {% endcomment %}
+      <a class="pos-btn pos-btn-outline" href="{% url 'cashier:home' %}">
+        Back to cashier
+      </a>
+
+    </div>
+
+  </section>
+</div>
+{% endblock %}

@@ -212,6 +212,66 @@ def test_checkout_with_invalid_product_config_does_not_create_empty_draft(cashie
 
 
 @pytest.mark.django_db
+def test_cashier_home_hides_products_missing_unit_or_tax_rate(cashier_client):
+    client, user, org = cashier_client
+    _prepare_cashier_session(client=client, org=org, user=user)
+    sellable = _prepare_product(org=org)
+    Product.objects.create(
+        org=org,
+        name="Broken product",
+        unit=None,
+        tax_rate=None,
+        unit_price=Decimal("5.00"),
+    )
+
+    response = client.get("/cashier/")
+
+    assert response.status_code == 200
+    content = response.content.decode()
+    assert sellable.name in content
+    assert "Broken product" not in content
+
+
+@pytest.mark.django_db
+def test_cart_add_rejects_products_missing_unit_or_tax_rate(cashier_client):
+    client, user, org = cashier_client
+    _prepare_cashier_session(client=client, org=org, user=user)
+    broken = Product.objects.create(
+        org=org,
+        name="Broken product",
+        unit=None,
+        tax_rate=None,
+        unit_price=Decimal("5.00"),
+    )
+
+    response = client.post(f"/cashier/cart/add/{broken.id}/")
+
+    assert response.status_code == 200
+    assert b"cannot be sold in cashier until unit and tax rate are set" in response.content
+    assert client.session[cashier_views.SESSION_CART] == {}
+
+
+@pytest.mark.django_db
+def test_cart_add_barcode_rejects_products_missing_unit_or_tax_rate(cashier_client):
+    client, user, org = cashier_client
+    _prepare_cashier_session(client=client, org=org, user=user)
+    Product.objects.create(
+        org=org,
+        name="Broken product",
+        barcode="12345",
+        unit=None,
+        tax_rate=None,
+        unit_price=Decimal("5.00"),
+    )
+
+    response = client.post("/cashier/cart/add-barcode/", data={"barcode": "12345"})
+
+    assert response.status_code == 200
+    assert b"cannot be sold in cashier until unit and tax rate are set" in response.content
+    assert client.session[cashier_views.SESSION_CART] == {}
+
+
+@pytest.mark.django_db
 def test_retry_fiscal_rebuilds_payload_and_requeues_failed_command(cashier_client):
     client, user, org = cashier_client
     _prepare_cashier_session(client=client, org=org, user=user)

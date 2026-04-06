@@ -17,16 +17,19 @@ from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 from django.views.decorators.http import require_http_methods
 from rest_framework.exceptions import ValidationError
 
+from apps.accounting.logic.record_sale import record_sale
 from apps.orders.logic.finalize_paid_order import finalize_paid_order
 from apps.orders.logic.refund_order import refund_paid_order
 from apps.orders.models import KitchenTicket, Order, OrderItem
 from apps.payments.logic.authorize_payment import authorize_payment
 from apps.payments.logic.capture_payment import capture_payment
 from apps.payments.logic.enqueue_device_commands import _build_fiscal_items, enqueue_payment_commands
-from apps.payments.logic.shift import close_shift
+from apps.payments.logic.shift import close_shift, shift_report
 from apps.payments.models import CashDrawerMovement, CashierSession, DeviceCommand, OrderPayment, Terminal
 from apps.products.models import Product
 from config.orgs.models import Organization
+
+
 
 from .integrations import send_fiscal_receipt, send_receipt_to_printer
 
@@ -100,7 +103,12 @@ def _get_products(org: Organization | None, query: str = ""):
 
     qs = (
         Product.objects
-        .filter(org=org, status=Product.STATUS_ACTIVE)
+        .filter(
+            org=org,
+            status=Product.STATUS_ACTIVE,
+            unit__isnull=False,
+            tax_rate__isnull=False,
+        )
         .annotate(
             stock_qty_annotated=Sum(
                 "stock_lots__remaining_qty",
@@ -112,6 +120,12 @@ def _get_products(org: Organization | None, query: str = ""):
     if query:
         qs = qs.filter(name__icontains=query)
     return qs
+
+
+def _product_checkout_error(product: Product) -> str:
+    return (
+        f'Product "{product.name}" cannot be sold in cashier until unit and tax rate are set.'
+    )
 
 
 def _get_product_unit_price(product: Product) -> Decimal:
@@ -297,6 +311,8 @@ def _confirm_cash_payment(*, payment: OrderPayment, actor, session: CashierSessi
         payment.failure_reason = str(exc)
         payment.save(update_fields=["status", "failure_reason", "updated_at"])
         return payment
+    
+    record_sale(order=payment.order, tender="cash") 
 
     CashDrawerMovement.objects.create(
         session=session,
@@ -513,7 +529,7 @@ def cashier_home(request: HttpRequest) -> HttpResponse:
         .order_by("-created_at")[:10]
     )
     cash_drawer_total = _cash_drawer_total(session)
-    today = timezone.localdate()
+    #today = timezone.localdate()
     todays_sales_total = (
         OrderPayment.objects
         .filter(
@@ -521,7 +537,8 @@ def cashier_home(request: HttpRequest) -> HttpResponse:
             terminal=session.terminal,
             status=OrderPayment.Status.CAPTURED,
             tender__in=[OrderPayment.Tender.CASH, OrderPayment.Tender.CARD],
-            captured_at__date=today,
+            captured_at__gte=session.opened_at,
+            
         )
         .aggregate(total=Coalesce(Sum("amount"), Value(Decimal("0.00"))))["total"]
     ).quantize(Decimal("0.01"))
@@ -590,10 +607,14 @@ def cart_add(request: HttpRequest, product_id: int) -> HttpResponse:
 
     product = get_object_or_404(Product, id=product_id, org=session.org)
     cart = _get_cart(request.session)
-    key = str(product.id)
-    cart[key] = cart.get(key, 0) + 1
-    _reset_checkout_idempotency(request.session)
-    request.session.modified = True
+    error = ""
+    if not product.unit or not product.tax_rate:
+        error = _product_checkout_error(product)
+    else:
+        key = str(product.id)
+        cart[key] = cart.get(key, 0) + 1
+        _reset_checkout_idempotency(request.session)
+        request.session.modified = True
 
     items = _cart_items(cart, session.org)
     totals = _cart_totals(items)
@@ -604,6 +625,7 @@ def cart_add(request: HttpRequest, product_id: int) -> HttpResponse:
         "totals": totals,
         "currency": settings.DEFAULT_CURRENCY,
         "last_added": product,
+        "cart_error": error,
     }
     return render(request, "cashier/partials/cart.html", context)
 
@@ -624,6 +646,8 @@ def cart_add_barcode(request: HttpRequest) -> HttpResponse:
         error = "Barcode is required."
     elif not product:
         error = f"Product with barcode {barcode} not found."
+    elif not product.unit or not product.tax_rate:
+        error = _product_checkout_error(product)
     else:
         key = str(product.id)
         cart[key] = cart.get(key, 0) + 1
@@ -1098,3 +1122,68 @@ def device_card_confirm(request: HttpRequest, public_id) -> HttpResponse:
 
     _confirm_card_payment(payment=payment, actor=None, session=session)
     return HttpResponse("ok")
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def session_close(request: HttpRequest) -> HttpResponse:
+    """
+    Z-отчёт и закрытие смены.
+
+    Двухшаговый процесс — кассир сначала видит итоги смены (GET),
+    затем явно подтверждает закрытие (POST).
+
+    Это защищает от случайного нажатия «Log out» в середине рабочего дня
+    и даёт возможность распечатать отчёт перед закрытием.
+
+    GET  — формирует отчёт по смене и показывает страницу подтверждения.
+    POST — фиксирует остаток в ящике, закрывает смену, разлогинивает кассира.
+    """
+    # Проверяем что есть активная сессия.
+    # _require_session_or_redirect вернёт HttpResponse-редирект если сессии нет,
+    # поэтому проверяем тип возвращаемого значения.
+    session = _require_session_or_redirect(request)
+    if isinstance(session, HttpResponse):
+        return session
+
+    # Строим отчёт по текущей смене.
+    # shift_report агрегирует все захваченные платежи за период смены:
+    # итоги по тендеру (cash/card), итоги по ставкам НДС, общий оборот.
+    report = shift_report(session=session)
+
+    # Считаем текущий остаток в кассовом ящике.
+    # Формула: opening_float + все cash_in + все sale_cash - все cash_out.
+    # Это число используется как closing_cash при закрытии смены.
+    cash_drawer_total = _cash_drawer_total(session)
+
+    if request.method == "POST":
+        # Фиксируем closing_cash и переводим сессию в статус CLOSED.
+        # После этого сессию нельзя переоткрыть — только создать новую.
+        close_shift(session=session, closing_cash=cash_drawer_total)
+
+        # Разлогиниваем пользователя из Django-сессии.
+        logout(request)
+
+        # Явно чистим кассовые ключи из сессии.
+        # logout() очищает всю сессию, но мы делаем это явно для читаемости
+        # и на случай если Django изменит поведение logout() в будущих версиях.
+        request.session.pop(SESSION_ORG_ID, None)
+        request.session.pop(SESSION_SESSION_ID, None)
+        request.session.pop(SESSION_CART, None)
+
+        return redirect("cashier:login")
+
+    # GET: показываем страницу с Z-отчётом для подтверждения.
+    return render(
+        request,
+        "cashier/session_close.html",
+        {
+            "session": session,
+            "org": session.org,
+            # report содержит: payments_total, tax_total, by_tender, by_tax_rate
+            "report": report,
+            # Остаток в ящике — будет записан как closing_cash при POST
+            "cash_drawer_total": cash_drawer_total,
+            "currency": settings.DEFAULT_CURRENCY,
+        },
+    )

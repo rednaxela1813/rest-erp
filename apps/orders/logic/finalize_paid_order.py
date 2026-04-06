@@ -8,6 +8,8 @@ from rest_framework.exceptions import ValidationError
 from apps.orders.logic.status_fsm import assert_can_transition
 from apps.orders.models import Order
 
+from apps.accounting.logic.record_stock_out import record_stock_out
+
 
 def finalize_paid_order(*, order: Order, actor=None) -> Order:
     """
@@ -80,13 +82,17 @@ def finalize_paid_order(*, order: Order, actor=None) -> Order:
         for pid, total_qty in qty_by_product_id.items():
             p = products_map[pid]
             try:
-                deduct_stock(
+                movements = deduct_stock(
                     org=order.org,
                     product=p,
                     quantity=total_qty,
                     reason="order_paid",
                     comment=str(order.public_id),
                 )
+                for m in movements:                
+
+                    record_stock_out(movement=m)  # связать с функцией, которая создаёт запись в бухгалтерии
+                    
             except InsufficientStock as e:
                 raise ValidationError({"order": str(e)})
 

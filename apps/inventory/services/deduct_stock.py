@@ -4,6 +4,7 @@ from django.db import transaction
 
 from apps.inventory.exceptions import InsufficientStock
 from apps.inventory.models import StockLot, StockMovement
+from apps.accounting.logic.record_stock_out import record_stock_out
 
 
 def deduct_stock(
@@ -65,6 +66,9 @@ def deduct_stock(
                 comment=comment,
             )
             movements.append(movement)
+            record_stock_out(movement=movement)
+
+       
 
     return movements
 
