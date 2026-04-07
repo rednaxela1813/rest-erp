@@ -29,7 +29,7 @@ from apps.payments.models import CashDrawerMovement, CashierSession, DeviceComma
 from apps.products.models import Product
 from config.orgs.models import Organization
 
-
+from apps.recipes.services.check_ingredients import has_enough_ingredients
 
 from .integrations import send_fiscal_receipt, send_receipt_to_printer
 
@@ -114,12 +114,21 @@ def _get_products(org: Organization | None, query: str = ""):
                 "stock_lots__remaining_qty",
                 filter=Q(stock_lots__status="active"),
             )
-        )
+        ).prefetch_related("recipe__ingredients__product__stock_lots")
         .order_by("name")
     )
     if query:
         qs = qs.filter(name__icontains=query)
-    return qs
+    # Фильтруем prepared продукты по наличию ингредиентов
+    # TODO: вариант Б — перенести проверку в SQL через аннотацию
+    result = []
+    for product in qs:
+        if product.product_type == Product.PRODUCT_TYPE_PREPARED:
+            if has_enough_ingredients(product):
+                result.append(product)
+        else:
+            result.append(product)
+    return result
 
 
 def _product_checkout_error(product: Product) -> str:
