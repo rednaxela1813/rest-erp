@@ -56,5 +56,5 @@ class RecipeItem(OrgScopedModel):
         
         
     def __str__(self) -> str:
-        return f"{self.quantity} {self.unit} of {self.product} for {self.recipe}"
+        return f"{self.quantity} of {self.product} for {self.recipe}"
     
