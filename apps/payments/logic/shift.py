@@ -5,9 +5,12 @@ from decimal import Decimal
 from django.db import transaction
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
+import structlog
 
 from apps.orders.models import OrderItem
 from apps.payments.models import CashierSession, OrderPayment
+
+logger = structlog.get_logger(__name__)
 
 
 def open_shift(*, org, terminal, cashier, opening_cash: Decimal) -> CashierSession:
@@ -18,6 +21,13 @@ def open_shift(*, org, terminal, cashier, opening_cash: Decimal) -> CashierSessi
     - Only one open session per terminal/org.
     - If the same cashier tries to open again, return existing session (idempotent).
     """
+    logger.info(
+        "shift_open_started",
+        org_id=str(org.public_id),
+        terminal_id=str(terminal.public_id),
+        cashier_id=str(cashier.id),
+        opening_cash=str(opening_cash),
+    )
     with transaction.atomic():
         existing = (
             CashierSession.objects
@@ -27,16 +37,39 @@ def open_shift(*, org, terminal, cashier, opening_cash: Decimal) -> CashierSessi
         )
         if existing:
             if existing.cashier_id != cashier.id:
+                logger.warning(
+                    "shift_open_terminal_busy",
+                    org_id=str(org.public_id),
+                    terminal_id=str(terminal.public_id),
+                    existing_session_id=str(existing.public_id),
+                    existing_cashier_id=str(existing.cashier_id),
+                    requested_cashier_id=str(cashier.id),
+                )
                 raise ValidationError({"session": ["Terminal already has an open shift."]})
+            logger.info(
+                "shift_open_reused_existing",
+                org_id=str(org.public_id),
+                terminal_id=str(terminal.public_id),
+                session_id=str(existing.public_id),
+                cashier_id=str(cashier.id),
+            )
             return existing
 
-        return CashierSession.objects.create(
+        session = CashierSession.objects.create(
             org=org,
             terminal=terminal,
             cashier=cashier,
             cash_drawer_start=opening_cash,
             status=CashierSession.STATUS_OPEN,
         )
+        logger.info(
+            "shift_open_succeeded",
+            org_id=str(org.public_id),
+            terminal_id=str(terminal.public_id),
+            session_id=str(session.public_id),
+            cashier_id=str(cashier.id),
+        )
+        return session
 
 
 def close_shift(*, session: CashierSession, closing_cash: Decimal) -> CashierSession:
@@ -47,13 +80,32 @@ def close_shift(*, session: CashierSession, closing_cash: Decimal) -> CashierSes
     - Only open sessions can be closed.
     - Closing sets cash drawer end amount and closed_at timestamp.
     """
+    logger.info(
+        "shift_close_started",
+        session_id=str(session.public_id),
+        org_id=str(session.org.public_id),
+        terminal_id=str(session.terminal.public_id),
+        closing_cash=str(closing_cash),
+    )
     if session.status != CashierSession.STATUS_OPEN:
+        logger.warning(
+            "shift_close_already_closed",
+            session_id=str(session.public_id),
+            status=session.status,
+        )
         raise ValidationError({"session": ["Shift is already closed."]})
 
     session.status = CashierSession.STATUS_CLOSED
     session.cash_drawer_end = closing_cash
     session.closed_at = timezone.now()
     session.save(update_fields=["status", "cash_drawer_end", "closed_at", "updated_at"])
+    logger.info(
+        "shift_close_succeeded",
+        session_id=str(session.public_id),
+        org_id=str(session.org.public_id),
+        terminal_id=str(session.terminal.public_id),
+        closing_cash=str(session.cash_drawer_end),
+    )
     return session
 
 
@@ -77,6 +129,12 @@ def shift_report(*, session: CashierSession) -> dict:
     - Payments linked to session terminal
     - Payments created between opened_at and closed_at (or now if still open)
     """
+    logger.info(
+        "shift_report_started",
+        session_id=str(session.public_id),
+        org_id=str(session.org.public_id),
+        terminal_id=str(session.terminal.public_id),
+    )
     end_ts = session.closed_at or timezone.now()
 
     payments = (
@@ -113,7 +171,7 @@ def shift_report(*, session: CashierSession) -> dict:
         key = str(rate.quantize(Decimal("0.01")))
         tax_by_rate[key] = tax_by_rate.get(key, Decimal("0.00")) + tax_amount
 
-    return {
+    report = {
         "payments_total": total_amount.quantize(Decimal("0.01")),
         "tax_total": total_tax.quantize(Decimal("0.01")),
         "by_tender": {k: v.quantize(Decimal("0.01")) for k, v in totals_by_tender.items()},
@@ -122,3 +180,11 @@ def shift_report(*, session: CashierSession) -> dict:
             for rate, amount in sorted(tax_by_rate.items())
         ],
     }
+    logger.info(
+        "shift_report_succeeded",
+        session_id=str(session.public_id),
+        payments_total=str(report["payments_total"]),
+        tax_total=str(report["tax_total"]),
+        payment_count=len(payments),
+    )
+    return report

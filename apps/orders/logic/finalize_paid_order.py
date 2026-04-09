@@ -4,6 +4,7 @@ from decimal import Decimal
 
 from django.db import transaction
 from rest_framework.exceptions import ValidationError
+import structlog
 
 from apps.orders.logic.status_fsm import assert_can_transition
 from apps.orders.models import Order
@@ -12,11 +13,19 @@ from apps.accounting.logic.record_stock_out import record_stock_out
 
 from apps.products.models import Product
 
+logger = structlog.get_logger(__name__)
+
 
 def finalize_paid_order(*, order: Order, actor=None) -> Order:
     """
     Use-case: finalize payment by moving order to paid and writing off stock.
     """
+    logger.info(
+        "order_finalize_started",
+        order_id=str(order.public_id),
+        actor_id=str(actor.id) if actor else "",
+        current_status=order.status,
+    )
     assert_can_transition(current=order.status, new=Order.STATUS_PAID)
 
     if order.status == Order.STATUS_PAID:
@@ -115,6 +124,14 @@ def finalize_paid_order(*, order: Order, actor=None) -> Order:
                     record_stock_out(movement=m)  # связать с функцией, которая создаёт запись в бухгалтерии
                     
             except InsufficientStock as e:
+                logger.warning(
+                    "order_finalize_insufficient_stock",
+                    order_id=str(order.public_id),
+                    product_id=str(p.public_id),
+                    product_name=p.name,
+                    requested_qty=str(total_qty),
+                    error=str(e),
+                )
                 raise ValidationError({"order": str(e)})
 
         old_status = order.status
@@ -144,4 +161,12 @@ def finalize_paid_order(*, order: Order, actor=None) -> Order:
             actor=actor if actor is not None else None,
         )
 
+    logger.info(
+        "order_finalize_succeeded",
+        order_id=str(order.public_id),
+        actor_id=str(actor.id) if actor else "",
+        inventory_products_count=len(qty_by_product_id),
+        kitchen_products_count=len(kitchen_qty_by_product_id),
+        kitchen_ticket_count=len(kitchen_qty_by_product_id),
+    )
     return order

@@ -22,6 +22,7 @@ class DummyResponse:
 
 def test_ekasa_client_posts_json(monkeypatch, settings):
     settings.EKASA_BASE_URL = "http://localhost:3010"
+    settings.EKASA_API_KEY = "test-api-key"
 
     captured = {}
 
@@ -40,3 +41,4 @@ def test_ekasa_client_posts_json(monkeypatch, settings):
     assert captured["url"].endswith("/api/v1/requests/receipts/cash_register")
     assert json.loads(captured["data"])["request"]["data"]["foo"] == "bar"
     assert (captured["headers"].get("Content-Type") or captured["headers"].get("Content-type")) == "application/json"
+    assert captured["headers"]["X-api-key"] == "test-api-key"

@@ -13,7 +13,7 @@ def has_enough_ingredients(product: Product) -> bool:
     """
     recipe = getattr(product, "recipe", None)
     if recipe is None:
-        return True # ← что вернуть если рецепта нет?
+        return True
     
     for ingredient in recipe.ingredients.all():
         stock = ingredient.product.stock_qty or 0

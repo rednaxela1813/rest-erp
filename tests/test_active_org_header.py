@@ -52,3 +52,22 @@ def test_org_context_endpoint_denies_when_not_member(auth_client, org_factory, s
     resp = client.get("/api/v1/orgs/context/")
     
     assert resp.status_code in (403, 404)
+
+
+def test_org_context_uses_session_active_org_when_header_missing(
+    auth_client, org_factory, member_factory
+):
+    client, user = auth_client()
+    org = org_factory(name="Session Org")
+    member_factory(org=org, user=user, role="member")
+
+    session = client.session
+    session["active_org_id"] = str(org.public_id)
+    session.save()
+
+    resp = client.get("/api/v1/orgs/context/")
+
+    assert resp.status_code == 200, resp.content
+    data = resp.json()
+    assert data["public_id"] == str(org.public_id)
+    assert data["name"] == org.name

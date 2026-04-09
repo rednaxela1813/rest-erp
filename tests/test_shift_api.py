@@ -1,8 +1,10 @@
 from decimal import Decimal
 
 import pytest
+from rest_framework.exceptions import ValidationError
 
 from apps.orders.models import Order, OrderItem
+from apps.payments.logic.shift import close_shift, open_shift
 from apps.payments.models import OrderPayment, Terminal
 from apps.products.models import Product, TaxRate, Unit
 
@@ -79,3 +81,67 @@ def test_open_close_shift_and_report(admin_client, capture_payment_api):
     assert data["totals"]["tax_total"] == "0.83"
     assert data["totals"]["by_tender"]["card"] == "5.00"
     assert data["totals"]["by_tax_rate"] == [{"rate": "20.00", "tax_total": "0.83"}]
+
+
+@pytest.mark.django_db
+def test_open_shift_is_idempotent_for_same_cashier(org_factory, user_factory):
+    org = org_factory()
+    cashier = user_factory(email="cashier@example.com")
+    terminal = Terminal.objects.create(org=org, name="POS 1", code="pos-1", status=Terminal.STATUS_ACTIVE)
+
+    first = open_shift(
+        org=org,
+        terminal=terminal,
+        cashier=cashier,
+        opening_cash=Decimal("10.00"),
+    )
+    second = open_shift(
+        org=org,
+        terminal=terminal,
+        cashier=cashier,
+        opening_cash=Decimal("99.00"),
+    )
+
+    assert first.id == second.id
+
+
+@pytest.mark.django_db
+def test_open_shift_rejects_other_cashier_when_terminal_already_open(org_factory, user_factory):
+    org = org_factory()
+    cashier_1 = user_factory(email="cashier1@example.com")
+    cashier_2 = user_factory(email="cashier2@example.com")
+    terminal = Terminal.objects.create(org=org, name="POS 1", code="pos-1", status=Terminal.STATUS_ACTIVE)
+
+    open_shift(
+        org=org,
+        terminal=terminal,
+        cashier=cashier_1,
+        opening_cash=Decimal("10.00"),
+    )
+
+    with pytest.raises(ValidationError, match="Terminal already has an open shift"):
+        open_shift(
+            org=org,
+            terminal=terminal,
+            cashier=cashier_2,
+            opening_cash=Decimal("5.00"),
+        )
+
+
+@pytest.mark.django_db
+def test_close_shift_rejects_already_closed_session(org_factory, user_factory):
+    from apps.payments.models import CashierSession
+
+    org = org_factory()
+    cashier = user_factory(email="cashier@example.com")
+    terminal = Terminal.objects.create(org=org, name="POS 1", code="pos-1", status=Terminal.STATUS_ACTIVE)
+    session = CashierSession.objects.create(
+        org=org,
+        terminal=terminal,
+        cashier=cashier,
+        cash_drawer_start=Decimal("0.00"),
+        status=CashierSession.STATUS_CLOSED,
+    )
+
+    with pytest.raises(ValidationError, match="Shift is already closed"):
+        close_shift(session=session, closing_cash=Decimal("1.00"))

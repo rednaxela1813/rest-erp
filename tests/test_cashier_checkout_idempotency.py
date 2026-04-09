@@ -2,6 +2,7 @@ from decimal import Decimal
 
 import pytest
 
+from apps.accounting.models import AccountingEntry
 from apps.cashier import views as cashier_views
 from apps.orders.models import Order
 from apps.payments.models import CashierSession, DeviceCommand, OrderPayment, Terminal
@@ -172,6 +173,37 @@ def test_checkout_cash_auto_confirms_payment(cashier_client):
 
 
 @pytest.mark.django_db
+def test_checkout_cash_with_ekasa_keeps_order_unpaid_until_fiscal_confirmation(cashier_client, settings):
+    settings.EKASA_ENABLED = True
+
+    client, user, org = cashier_client
+    _prepare_cashier_session(client=client, org=org, user=user)
+    product = _prepare_product(org=org)
+
+    session_data = client.session
+    session_data[cashier_views.SESSION_CART] = {str(product.id): 1}
+    session_data.save()
+
+    response = client.post("/cashier/checkout/", data={"tender": "cash"})
+    assert response.status_code == 302
+
+    payment = OrderPayment.objects.get(org=org)
+    order = payment.order
+    order.refresh_from_db()
+
+    assert payment.status == OrderPayment.Status.CAPTURED
+    assert payment.fiscal_status == OrderPayment.FiscalStatus.PENDING
+    assert order.status == Order.STATUS_DRAFT
+    assert AccountingEntry.objects.filter(
+        org=org,
+        entry_type__in=[
+            AccountingEntry.EntryType.SALE_CASH,
+            AccountingEntry.EntryType.SALE_CARD,
+        ],
+    ).count() == 0
+
+
+@pytest.mark.django_db
 def test_checkout_card_auto_confirms_payment(cashier_client):
     client, user, org = cashier_client
     _prepare_cashier_session(client=client, org=org, user=user)
@@ -308,3 +340,68 @@ def test_retry_fiscal_rebuilds_payload_and_requeues_failed_command(cashier_clien
     assert command.payload["items"][0]["tax_rate"] == "20.00"
     assert payment.fiscal_status == OrderPayment.FiscalStatus.PENDING
     assert payment.failure_reason == ""
+
+
+@pytest.mark.django_db
+def test_payment_status_recreates_missing_fiscal_command(cashier_client, settings):
+    settings.EKASA_ENABLED = True
+
+    client, user, org = cashier_client
+    _prepare_cashier_session(client=client, org=org, user=user)
+    product = _prepare_product(org=org)
+
+    session_data = client.session
+    session_data[cashier_views.SESSION_CART] = {str(product.id): 1}
+    session_data.save()
+
+    response = client.post("/cashier/checkout/", data={"tender": "cash"})
+    assert response.status_code == 302
+
+    payment = OrderPayment.objects.get(org=org)
+    DeviceCommand.objects.filter(
+        payment=payment,
+        command_type=DeviceCommand.Type.FISCALIZE_SALE,
+    ).delete()
+
+    status_resp = client.get(f"/cashier/payments/{payment.public_id}/status/")
+    assert status_resp.status_code == 200
+    assert DeviceCommand.objects.filter(
+        payment=payment,
+        command_type=DeviceCommand.Type.FISCALIZE_SALE,
+    ).exists()
+
+
+@pytest.mark.django_db
+def test_payment_status_marks_failed_when_inline_fiscal_processing_crashes(
+    cashier_client,
+    monkeypatch,
+    settings,
+):
+    settings.EKASA_ENABLED = True
+
+    client, user, org = cashier_client
+    _prepare_cashier_session(client=client, org=org, user=user)
+    product = _prepare_product(org=org)
+
+    session_data = client.session
+    session_data[cashier_views.SESSION_CART] = {str(product.id): 1}
+    session_data.save()
+
+    response = client.post("/cashier/checkout/", data={"tender": "cash"})
+    assert response.status_code == 302
+
+    payment = OrderPayment.objects.get(org=org)
+
+    class DummyTask:
+        @staticmethod
+        def run(*, org_id: int, limit: int):
+            raise RuntimeError("ekasa offline")
+
+    monkeypatch.setattr("apps.payments.tasks.process_device_commands_ekasa", DummyTask)
+
+    status_resp = client.get(f"/cashier/payments/{payment.public_id}/status/")
+    assert status_resp.status_code == 200
+
+    payment.refresh_from_db()
+    assert payment.fiscal_status == OrderPayment.FiscalStatus.FAILED
+    assert payment.failure_reason == "ekasa offline"

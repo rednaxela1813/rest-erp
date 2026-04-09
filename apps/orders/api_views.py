@@ -2,6 +2,7 @@
 
 from django.shortcuts import get_object_or_404
 import inspect
+import structlog
 
 from rest_framework import generics, status
 from rest_framework.response import Response
@@ -26,6 +27,8 @@ from .serializers import (
     OrderSerializer,
     OrderStatusEventSerializer,
 )
+
+logger = structlog.get_logger(__name__)
 
 
 class OrderListCreateApi(generics.ListCreateAPIView):
@@ -74,6 +77,11 @@ class OrderItemListCreateApi(generics.ListCreateAPIView):
         order = self.get_order()
 
         if order.status != Order.STATUS_DRAFT:
+            logger.warning(
+                "order_item_create_rejected_non_draft_order",
+                order_id=str(order.public_id),
+                order_status=order.status,
+            )
             raise ValidationError({"order": "Cannot modify items for non-draft order."})
 
         serializer.save(order=order)
@@ -114,6 +122,12 @@ class OrderDetailApi(generics.RetrieveUpdateAPIView):
         old_status = order.status
 
         if new_status == Order.STATUS_PAID:
+            logger.warning(
+                "order_update_rejected_direct_paid_transition",
+                order_id=str(order.public_id),
+                old_status=old_status,
+                new_status=new_status,
+            )
             raise ValidationError(
                 {"status": ["Direct order payment is blocked. Use payment capture endpoint."]}
             )
@@ -164,6 +178,12 @@ class OrderRefundApi(APIView):
     def post(self, request, public_id):
         org = get_request_org(request)
         order = get_object_or_404(Order, org=org, public_id=public_id)
+        logger.info(
+            "order_refund_api_requested",
+            org_id=str(org.public_id),
+            order_id=str(order.public_id),
+            user_id=str(request.user.id),
+        )
 
         receipt = refund_paid_order(order=order, actor=request.user)
         order.refresh_from_db()
@@ -193,6 +213,12 @@ class OrderStornoApi(APIView):
     def post(self, request, public_id):
         org = get_request_org(request)
         order = get_object_or_404(Order, org=org, public_id=public_id)
+        logger.info(
+            "order_storno_api_requested",
+            org_id=str(org.public_id),
+            order_id=str(order.public_id),
+            user_id=str(request.user.id),
+        )
 
         receipt = storno_paid_order(order=order, actor=request.user)
         order.refresh_from_db()
@@ -258,9 +284,20 @@ class KitchenTicketClaimNextApi(APIView):
                 .first()
             )
             if not ticket:
+                logger.info(
+                    "kitchen_ticket_claim_next_empty",
+                    org_id=str(org.public_id),
+                    user_id=str(request.user.id),
+                )
                 return Response(status=status.HTTP_204_NO_CONTENT)
             ticket.status = KitchenTicket.Status.IN_PROGRESS
             ticket.save(update_fields=["status", "updated_at"])
+        logger.info(
+            "kitchen_ticket_claim_next_succeeded",
+            org_id=str(org.public_id),
+            user_id=str(request.user.id),
+            ticket_id=str(ticket.public_id),
+        )
         return Response(KitchenTicketSerializer(ticket).data)
 
 

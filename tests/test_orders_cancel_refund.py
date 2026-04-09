@@ -78,6 +78,6 @@ def test_cancel_paid_order_restores_stock_and_sets_status_cancelled(admin_client
     order.refresh_from_db()
     assert order.status == "cancelled"
 
-    # restore_stock MVP не возвращает остаток в партию
+    # restore_stock MVP  возвращает остаток в партию
     lot.refresh_from_db()
-    assert lot.remaining_qty == Decimal("5.000")
+    assert lot.remaining_qty == Decimal("10.000")

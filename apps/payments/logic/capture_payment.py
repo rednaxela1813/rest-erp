@@ -10,10 +10,15 @@ from apps.payments.logic.enqueue_device_commands import enqueue_payment_commands
 from apps.payments.models import FiscalReceipt, OrderPayment
 from apps.payments.providers import registry
 from apps.orders.logic.finalize_paid_order import finalize_paid_order
-
 from apps.accounting.logic.record_sale import record_sale
 
 logger = structlog.get_logger(__name__)
+
+
+def _requires_post_fiscal_finalization(*, payment: OrderPayment) -> bool:
+    if not settings.EKASA_ENABLED:
+        return False
+    return payment.terminal_id is not None or payment.provider == "ekasa"
 
 
 def capture_payment(*, payment: OrderPayment, actor=None, timeout_s: int = 30) -> OrderPayment:
@@ -34,10 +39,11 @@ def capture_payment(*, payment: OrderPayment, actor=None, timeout_s: int = 30) -
     with transaction.atomic():
         payment.status = OrderPayment.Status.CAPTURED
         payment.captured_at = timezone.now()
-        if settings.EKASA_ENABLED:
+        requires_post_fiscal_finalization = _requires_post_fiscal_finalization(payment=payment)
+        if requires_post_fiscal_finalization:
             payment.fiscal_status = OrderPayment.FiscalStatus.PENDING
         payment.raw_provider_payload = payload
-        if settings.EKASA_ENABLED:
+        if requires_post_fiscal_finalization:
             payment.save(
                 update_fields=[
                     "status",
@@ -50,13 +56,11 @@ def capture_payment(*, payment: OrderPayment, actor=None, timeout_s: int = 30) -
         else:
             payment.save(update_fields=["status", "captured_at", "raw_provider_payload", "updated_at"])
 
-        finalize_paid_order(order=payment.order, actor=actor)
-        
-        record_sale(order=payment.order, tender=payment.tender)  # связать с функцией, которая создаёт запись в бухгалтерии
-        
+        if not requires_post_fiscal_finalization:
+            finalize_paid_order(order=payment.order, actor=actor)
+            record_sale(order=payment.order, tender=payment.tender)
 
-
-        if payment.tender == OrderPayment.Tender.CARD:
+        if payment.tender == OrderPayment.Tender.CARD and not requires_post_fiscal_finalization:
             FiscalReceipt.objects.get_or_create(
                 payment=payment,
                 receipt_type=FiscalReceipt.Type.SALE,
@@ -74,7 +78,7 @@ def capture_payment(*, payment: OrderPayment, actor=None, timeout_s: int = 30) -
         # KOT is only needed if the order produced kitchen tickets.
         include_kot = payment.order.kitchen_tickets.exists()
         enqueue_payment_commands(payment=payment, include_kot=include_kot)
-        if settings.EKASA_ENABLED:
+        if requires_post_fiscal_finalization:
             from apps.payments.tasks import process_device_commands_ekasa
             process_device_commands_ekasa.delay(org_id=payment.org_id, limit=50)
 
@@ -82,6 +86,6 @@ def capture_payment(*, payment: OrderPayment, actor=None, timeout_s: int = 30) -
         "payment_capture_succeeded",
         payment_id=str(payment.public_id),
         order_id=str(payment.order.public_id),
-        fiscal_receipt_created=payment.tender == OrderPayment.Tender.CARD,
+        fiscal_receipt_created=payment.tender == OrderPayment.Tender.CARD and not _requires_post_fiscal_finalization(payment=payment),
     )
     return payment

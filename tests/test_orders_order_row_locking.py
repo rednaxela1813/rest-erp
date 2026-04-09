@@ -47,7 +47,7 @@ def test_cancel_order_is_idempotent_and_does_not_touch_stock_when_already_cancel
 
     # партия не меняется при отмене (restore_stock MVP не трогает лоты)
     lot.refresh_from_db()
-    assert lot.remaining_qty == Decimal("8.000")
+    assert lot.remaining_qty == Decimal("10.000")
 
     order.refresh_from_db()
     assert order.status == Order.STATUS_CANCELLED
@@ -56,9 +56,9 @@ def test_cancel_order_is_idempotent_and_does_not_touch_stock_when_already_cancel
     with pytest.raises(ValidationError):
         cancel_order(order=order)
 
-    # остаток в партии не изменился
+    # остаток в партии  изменился
     lot.refresh_from_db()
-    assert lot.remaining_qty == Decimal("8.000")
+    assert lot.remaining_qty == Decimal("10.000")
 
     order.refresh_from_db()
     assert order.status == Order.STATUS_CANCELLED

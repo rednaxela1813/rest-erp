@@ -1,4 +1,5 @@
 import csv
+import structlog
 
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
@@ -11,6 +12,8 @@ from config.orgs.models import Organization, OrganizationMember
 
 from apps.logs_dashboard.models import LogEntry
 
+logger = structlog.get_logger(__name__)
+
 
 @login_required
 def logs_list(request):
@@ -20,6 +23,11 @@ def logs_list(request):
         org_obj = Organization.objects.filter(public_id=org_candidate, members__user=request.user).first()
         if org_obj:
             request.session["active_org_id"] = str(org_obj.public_id)
+            logger.info(
+                "logs_dashboard_org_selected_from_query",
+                user_id=str(request.user.id),
+                org_id=str(org_obj.public_id),
+            )
             return redirect("logs-list")
 
     try:
@@ -29,7 +37,13 @@ def logs_list(request):
         memberships = OrganizationMember.objects.filter(user=request.user).select_related("org")
         if memberships.count() == 1:
             request.session["active_org_id"] = str(memberships[0].org.public_id)
+            logger.info(
+                "logs_dashboard_auto_selected_single_org",
+                user_id=str(request.user.id),
+                org_id=str(memberships[0].org.public_id),
+            )
             return redirect("logs-list")
+        logger.warning("logs_dashboard_org_resolution_failed", user_id=str(request.user.id))
         return HttpResponseForbidden("Organization not accessible")
 
     membership = OrganizationMember.objects.filter(org=org, user=request.user).first()
@@ -37,6 +51,11 @@ def logs_list(request):
         OrganizationMember.ROLE_ADMIN,
         OrganizationMember.ROLE_OWNER,
     }:
+        logger.warning(
+            "logs_dashboard_access_denied_insufficient_role",
+            user_id=str(request.user.id),
+            org_id=str(org.public_id),
+        )
         return HttpResponseForbidden("Insufficient permissions")
 
     qs = LogEntry.objects.filter(org_id=str(org.public_id)).order_by("-created_at")
@@ -75,6 +94,12 @@ def logs_list(request):
 
     if request.GET.get("format") == "csv":
         max_rows = int(request.GET.get("limit") or 5000)
+        logger.info(
+            "logs_dashboard_csv_export_started",
+            user_id=str(request.user.id),
+            org_id=str(org.public_id),
+            limit=max_rows,
+        )
         response = HttpResponse(content_type="text/csv")
         response["Content-Disposition"] = "attachment; filename=logs.csv"
         writer = csv.writer(response)

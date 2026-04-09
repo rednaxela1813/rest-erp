@@ -3,6 +3,7 @@ from __future__ import annotations
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from datetime import date, datetime, timedelta
+import structlog
 
 from django.db.models import Count, Q, Sum
 from django.shortcuts import render, redirect
@@ -13,6 +14,8 @@ from apps.orders.models import Order, OrderItem
 from apps.payments.models import CashierSession, DeviceCommand, OrderPayment, FiscalReceipt
 from apps.products.models import Product
 
+logger = structlog.get_logger(__name__)
+
 
 def _ensure_admin_or_owner(request, org) -> None:
     membership = OrganizationMember.objects.filter(org=org, user=request.user).first()
@@ -20,6 +23,11 @@ def _ensure_admin_or_owner(request, org) -> None:
         OrganizationMember.ROLE_ADMIN,
         OrganizationMember.ROLE_OWNER,
     ):
+        logger.warning(
+            "ops_dashboard_access_denied_insufficient_role",
+            org_id=str(org.public_id),
+            user_id=str(request.user.id),
+        )
         raise PermissionDenied("Admin/owner access required.")
 
 
@@ -203,6 +211,7 @@ def ops_dashboard_view(request):
         org = _get_request_org(request)
     except PermissionDenied as exc:
         if 'Missing "X-ORG-ID"' in str(exc):
+            logger.info("ops_dashboard_redirect_select_org", user_id=str(request.user.id))
             return redirect("ops-dashboard-select-org")
         raise
     _ensure_admin_or_owner(request, org)
@@ -226,6 +235,11 @@ def ops_dashboard_view(request):
 def ops_dashboard_metrics_view(request):
     org = _get_request_org(request)
     _ensure_admin_or_owner(request, org)
+    logger.info(
+        "ops_dashboard_metrics_view_rendered",
+        org_id=str(org.public_id),
+        user_id=str(request.user.id),
+    )
     metrics = _get_dashboard_metrics(org)
     return render(
         request,
@@ -246,6 +260,11 @@ def ops_dashboard_select_org_view(request):
         .order_by("org__name")
     )
     orgs = [membership.org for membership in memberships]
+    logger.info(
+        "ops_dashboard_select_org_view_rendered",
+        user_id=str(request.user.id),
+        org_count=len(orgs),
+    )
     return render(
         request,
         "ops_dashboard/select_org.html",

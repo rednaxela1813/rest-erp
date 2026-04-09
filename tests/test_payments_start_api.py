@@ -49,3 +49,46 @@ def test_payment_start_is_idempotent(admin_client):
     assert resp_2.status_code == 200, resp_2.content
 
     assert resp_1.json()["payment"] == resp_2.json()["payment"]
+
+
+@pytest.mark.django_db
+def test_payment_start_rejects_amount_mismatch(admin_client):
+    client, user, org = admin_client
+
+    unit = Unit.objects.create(org=org, name="pcs", status=Unit.STATUS_ACTIVE)
+    tax = TaxRate.objects.create(org=org, name="VAT 20", rate=Decimal("20.00"))
+    product = Product.objects.create(
+        org=org,
+        name="Burger",
+        status=Product.STATUS_ACTIVE,
+        unit=unit,
+        tax_rate=tax,
+        unit_price=Decimal("5.00"),
+    )
+
+    order = Order.objects.create(org=org)
+    OrderItem.objects.create(
+        order=order,
+        product=product,
+        product_name=product.name,
+        qty=Decimal("1.000"),
+        unit=unit,
+        unit_price=Decimal("5.00"),
+        tax_rate=tax,
+    )
+    order.recompute_totals()
+    order.save(update_fields=["subtotal", "tax_total", "total", "updated_at"])
+
+    resp = client.post(
+        "/api/v1/payments/start/",
+        data={
+            "order": str(order.public_id),
+            "tender": "card",
+            "amount": "4.99",
+            "currency": "EUR",
+        },
+        content_type="application/json",
+    )
+
+    assert resp.status_code == 400, resp.content
+    assert resp.json()["amount"] == ["Amount must match order total."]

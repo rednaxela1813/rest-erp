@@ -48,3 +48,36 @@ def test_org_member_cannot_add_member(
 
     assert resp.status_code == 403
 
+
+def test_org_admin_cannot_add_missing_user(admin_client):
+    client, admin, org = admin_client
+
+    resp = client.post(
+        "/api/v1/orgs/members/",
+        data={
+            "email": "missing@example.com",
+            "role": "member",
+        },
+        content_type="application/json",
+    )
+
+    assert resp.status_code == 400, resp.content
+    assert resp.json()["email"] == "User with this email does not exist."
+
+
+def test_org_admin_cannot_add_duplicate_member(admin_client, user_factory, member_factory):
+    client, admin, org = admin_client
+    existing_user = user_factory(email="existing@example.com")
+    member_factory(org=org, user=existing_user, role="member")
+
+    resp = client.post(
+        "/api/v1/orgs/members/",
+        data={
+            "email": "existing@example.com",
+            "role": "member",
+        },
+        content_type="application/json",
+    )
+
+    assert resp.status_code == 400, resp.content
+    assert resp.json()["email"] == "User is already a member of this organization."

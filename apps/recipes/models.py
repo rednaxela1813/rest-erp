@@ -41,7 +41,7 @@ class Recipe(OrgScopedModel):
 class RecipeItem(OrgScopedModel):
     recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE, related_name="ingredients")
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="used_in_recipes")
-    quantity = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal("0.01"))])
+    quantity = models.DecimalField(max_digits=10, decimal_places=4, validators=[MinValueValidator(Decimal("0.001"))])
     #unit = models.ForeignKey(Unit, on_delete=models.CASCADE, related_name="recipe_ingredients")
     
     

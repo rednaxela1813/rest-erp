@@ -93,7 +93,7 @@ class OrderPayment(OrgScopedModel):
     authorized_at = models.DateTimeField(null=True, blank=True)
     captured_at = models.DateTimeField(null=True, blank=True)
     cancelled_at = models.DateTimeField(null=True, blank=True)
-    failure_reason = models.CharField(max_length=255, blank=True, default="")
+    failure_reason = models.TextField(max_length=255, blank=True, default="")
 
     # Separate status trackers for outage-resilient capture and fiscalization.
     # Null keeps existing data neutral until workflows are wired in.

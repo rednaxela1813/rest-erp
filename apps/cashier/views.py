@@ -3,6 +3,7 @@ from __future__ import annotations
 from decimal import Decimal, InvalidOperation
 import uuid
 from typing import Dict, List
+import structlog
 
 from django.conf import settings
 from django.contrib.auth import authenticate, login, logout
@@ -17,7 +18,6 @@ from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 from django.views.decorators.http import require_http_methods
 from rest_framework.exceptions import ValidationError
 
-from apps.accounting.logic.record_sale import record_sale
 from apps.orders.logic.finalize_paid_order import finalize_paid_order
 from apps.orders.logic.refund_order import refund_paid_order
 from apps.orders.models import KitchenTicket, Order, OrderItem
@@ -39,6 +39,8 @@ SESSION_CART = "cashier_cart"
 SESSION_CHECKOUT_IDEMPOTENCY = "cashier_checkout_idempotency"
 SESSION_CHECKOUT_ERROR = "cashier_checkout_error"
 SESSION_REFUND_ERROR = "cashier_refund_error"
+
+logger = structlog.get_logger(__name__)
 
 
 def _parse_amount(raw_value: str) -> Decimal:
@@ -106,9 +108,10 @@ def _get_products(org: Organization | None, query: str = ""):
         .filter(
             org=org,
             status=Product.STATUS_ACTIVE,
+            
             unit__isnull=False,
             tax_rate__isnull=False,
-        )
+        ).exclude(product_type=Product.PRODUCT_TYPE_INGREDIENT)
         .annotate(
             stock_qty_annotated=Sum(
                 "stock_lots__remaining_qty",
@@ -313,15 +316,14 @@ def _confirm_cash_payment(*, payment: OrderPayment, actor, session: CashierSessi
     else:
         payment.save(update_fields=["status", "captured_at", "updated_at"])
 
-    try:
-        finalize_paid_order(order=payment.order, actor=actor)
-    except ValidationError as exc:
-        payment.status = OrderPayment.Status.FAILED
-        payment.failure_reason = str(exc)
-        payment.save(update_fields=["status", "failure_reason", "updated_at"])
-        return payment
-    
-    record_sale(order=payment.order, tender="cash") 
+    if not settings.EKASA_ENABLED:
+        try:
+            finalize_paid_order(order=payment.order, actor=actor)
+        except ValidationError as exc:
+            payment.status = OrderPayment.Status.FAILED
+            payment.failure_reason = str(exc)
+            payment.save(update_fields=["status", "failure_reason", "updated_at"])
+            return payment
 
     CashDrawerMovement.objects.create(
         session=session,
@@ -428,6 +430,13 @@ def session_open(request: HttpRequest) -> HttpResponse:
         selected_terminal_id = request.POST.get("terminal_id", "")
         opening_cash_value = request.POST.get("opening_cash", "0.00")
         opening_cash = _parse_amount(opening_cash_value)
+        logger.info(
+            "cashier_session_open_requested",
+            user_id=str(request.user.id),
+            requested_org_id=selected_org_id,
+            requested_terminal_id=selected_terminal_id,
+            opening_cash=str(opening_cash),
+        )
 
         org = Organization.objects.filter(public_id=selected_org_id, members__user=request.user).first()
         terminal = None
@@ -445,6 +454,12 @@ def session_open(request: HttpRequest) -> HttpResponse:
                     terminal.save(update_fields=["status"])
 
         if org is None or terminal is None:
+            logger.warning(
+                "cashier_session_open_invalid_selection",
+                user_id=str(request.user.id),
+                requested_org_id=selected_org_id,
+                requested_terminal_id=selected_terminal_id,
+            )
             error = "Select organization and terminal."
         else:
             existing = CashierSession.objects.filter(
@@ -454,10 +469,25 @@ def session_open(request: HttpRequest) -> HttpResponse:
             ).first()
             if existing:
                 if existing.cashier_id == request.user.id:
+                    logger.info(
+                        "cashier_session_open_reused_existing",
+                        user_id=str(request.user.id),
+                        org_id=str(org.public_id),
+                        terminal_id=str(terminal.public_id),
+                        session_id=str(existing.public_id),
+                    )
                     request.session[SESSION_ORG_ID] = str(org.public_id)
                     request.session[SESSION_SESSION_ID] = existing.id
                     request.session.setdefault(SESSION_CART, {})
                     return redirect("cashier:home")
+                logger.warning(
+                    "cashier_session_open_terminal_busy",
+                    user_id=str(request.user.id),
+                    org_id=str(org.public_id),
+                    terminal_id=str(terminal.public_id),
+                    existing_session_id=str(existing.public_id),
+                    existing_cashier_id=str(existing.cashier_id),
+                )
                 error = "Terminal already has an open session."
             else:
                 session = CashierSession.objects.create(
@@ -473,6 +503,13 @@ def session_open(request: HttpRequest) -> HttpResponse:
                         movement_type=CashDrawerMovement.Type.OPENING_FLOAT,
                         amount=opening_cash,
                     )
+                logger.info(
+                    "cashier_session_open_succeeded",
+                    user_id=str(request.user.id),
+                    org_id=str(org.public_id),
+                    terminal_id=str(terminal.public_id),
+                    session_id=str(session.public_id),
+                )
                 request.session[SESSION_ORG_ID] = str(org.public_id)
                 request.session[SESSION_SESSION_ID] = session.id
                 request.session[SESSION_CART] = {}
@@ -810,11 +847,33 @@ def checkout(request: HttpRequest) -> HttpResponse:
 
     cart = _get_cart(request.session)
     items = _cart_items(cart, session.org)
+    tender = request.POST.get("tender")
+    logger.info(
+        "cashier_checkout_requested",
+        org_id=str(session.org.public_id),
+        session_id=str(session.public_id),
+        user_id=str(request.user.id),
+        tender=tender or "",
+        cart_items_count=len(items),
+        cart_count=sum(cart.values()) if cart else 0,
+    )
     if not items:
+        logger.warning(
+            "cashier_checkout_empty_cart",
+            org_id=str(session.org.public_id),
+            session_id=str(session.public_id),
+            user_id=str(request.user.id),
+        )
         return redirect("cashier:home")
 
-    tender = request.POST.get("tender")
     if tender not in (OrderPayment.Tender.CASH, OrderPayment.Tender.CARD):
+        logger.warning(
+            "cashier_checkout_invalid_tender",
+            org_id=str(session.org.public_id),
+            session_id=str(session.public_id),
+            user_id=str(request.user.id),
+            tender=tender or "",
+        )
         return redirect("cashier:home")
 
     fingerprint = _cart_fingerprint(cart=cart, tender=tender)
@@ -829,6 +888,13 @@ def checkout(request: HttpRequest) -> HttpResponse:
             org=session.org, idempotency_key=idempotency_key
         ).first()
         if existing:
+            logger.info(
+                "cashier_checkout_reused_existing_payment",
+                org_id=str(session.org.public_id),
+                session_id=str(session.public_id),
+                payment_id=str(existing.public_id),
+                idempotency_key=idempotency_key,
+            )
             return redirect("cashier:payment_wait", public_id=existing.public_id)
     else:
         idempotency_key = uuid.uuid4().hex
@@ -838,6 +904,12 @@ def checkout(request: HttpRequest) -> HttpResponse:
     try:
         order = _build_order_from_cart(org=session.org, cart_items=items)
     except ValueError:
+        logger.warning(
+            "cashier_checkout_invalid_product_config",
+            org_id=str(session.org.public_id),
+            session_id=str(session.public_id),
+            user_id=str(request.user.id),
+        )
         request.session[SESSION_CHECKOUT_ERROR] = (
             "Cannot checkout: one or more products are missing unit or tax rate."
         )
@@ -855,6 +927,13 @@ def checkout(request: HttpRequest) -> HttpResponse:
             org=session.org, idempotency_key=idempotency_key
         ).first()
         if existing:
+            logger.info(
+                "cashier_checkout_integrity_reused_existing_payment",
+                org_id=str(session.org.public_id),
+                session_id=str(session.public_id),
+                payment_id=str(existing.public_id),
+                idempotency_key=idempotency_key,
+            )
             return redirect("cashier:payment_wait", public_id=existing.public_id)
         raise
 
@@ -866,6 +945,15 @@ def checkout(request: HttpRequest) -> HttpResponse:
     else:
         _confirm_card_payment(payment=payment, actor=request.user, session=session)
 
+    logger.info(
+        "cashier_checkout_created_payment",
+        org_id=str(session.org.public_id),
+        session_id=str(session.public_id),
+        order_id=str(order.public_id),
+        payment_id=str(payment.public_id),
+        tender=tender,
+        payment_status=payment.status,
+    )
     return redirect("cashier:payment_wait", public_id=payment.public_id)
 
 
@@ -902,10 +990,39 @@ def payment_status(request: HttpRequest, public_id) -> HttpResponse:
         and payment.status == OrderPayment.Status.CAPTURED
         and payment.fiscal_status == OrderPayment.FiscalStatus.PENDING
     ):
+        fiscal_types = [
+            DeviceCommand.Type.FISCALIZE_SALE,
+            DeviceCommand.Type.FISCALIZE_REFUND,
+            DeviceCommand.Type.FISCALIZE_STORNO,
+        ]
+        has_fiscal_command = DeviceCommand.objects.filter(
+            payment=payment,
+            command_type__in=fiscal_types,
+        ).exists()
+        if not has_fiscal_command:
+            include_kot = payment.order.kitchen_tickets.exists()
+            enqueue_payment_commands(
+                payment=payment,
+                include_kot=include_kot,
+                include_payment_capture=False,
+            )
+
         # Fallback: process fiscal queue inline during status polling.
         # This keeps cashier UI responsive even when Celery is delayed.
         from apps.payments.tasks import process_device_commands_ekasa
-        process_device_commands_ekasa.run(org_id=session.org_id, limit=50)
+        try:
+            process_device_commands_ekasa.run(org_id=session.org_id, limit=50)
+        except Exception as exc:
+            logger.exception(
+                "cashier_payment_status_inline_fiscal_failed",
+                org_id=str(session.org.public_id),
+                session_id=str(session.public_id),
+                payment_id=str(payment.public_id),
+                error=str(exc),
+            )
+            payment.fiscal_status = OrderPayment.FiscalStatus.FAILED
+            payment.failure_reason = str(exc)
+            payment.save(update_fields=["fiscal_status", "failure_reason", "updated_at"])
         payment.refresh_from_db()
     failed_fiscal_command = (
         DeviceCommand.objects
@@ -945,8 +1062,22 @@ def payment_retry_fiscal(request: HttpRequest, public_id) -> HttpResponse:
 
     payment = get_object_or_404(OrderPayment, org=session.org, public_id=public_id)
     if payment.status != OrderPayment.Status.CAPTURED:
+        logger.warning(
+            "cashier_payment_retry_fiscal_invalid_status",
+            org_id=str(session.org.public_id),
+            session_id=str(session.public_id),
+            payment_id=str(payment.public_id),
+            payment_status=payment.status,
+        )
         return redirect("cashier:payment_wait", public_id=payment.public_id)
 
+    logger.info(
+        "cashier_payment_retry_fiscal_started",
+        org_id=str(session.org.public_id),
+        session_id=str(session.public_id),
+        payment_id=str(payment.public_id),
+        order_id=str(payment.order.public_id),
+    )
     sale_command = (
         DeviceCommand.objects
         .filter(payment=payment, command_type=DeviceCommand.Type.FISCALIZE_SALE)
@@ -995,6 +1126,13 @@ def payment_retry_fiscal(request: HttpRequest, public_id) -> HttpResponse:
     payment.failure_reason = ""
     payment.save(update_fields=["fiscal_status", "failure_reason", "updated_at"])
     _trigger_ekasa_processing_for_org(payment.org_id)
+    logger.info(
+        "cashier_payment_retry_fiscal_succeeded",
+        org_id=str(session.org.public_id),
+        session_id=str(session.public_id),
+        payment_id=str(payment.public_id),
+        sale_command_id=str(sale_command.public_id) if sale_command else "",
+    )
     return redirect("cashier:payment_wait", public_id=payment.public_id)
 
 
@@ -1084,10 +1222,32 @@ def order_refund(request: HttpRequest, public_id) -> HttpResponse:
         return session
 
     order = get_object_or_404(Order, org=session.org, public_id=public_id)
+    logger.info(
+        "cashier_order_refund_started",
+        org_id=str(session.org.public_id),
+        session_id=str(session.public_id),
+        order_id=str(order.public_id),
+        user_id=str(request.user.id),
+    )
     try:
         refund_paid_order(order=order, actor=request.user)
         _trigger_ekasa_processing_for_org(session.org_id)
+        logger.info(
+            "cashier_order_refund_succeeded",
+            org_id=str(session.org.public_id),
+            session_id=str(session.public_id),
+            order_id=str(order.public_id),
+            user_id=str(request.user.id),
+        )
     except ValidationError as exc:
+        logger.warning(
+            "cashier_order_refund_failed",
+            org_id=str(session.org.public_id),
+            session_id=str(session.public_id),
+            order_id=str(order.public_id),
+            user_id=str(request.user.id),
+            error=str(exc),
+        )
         request.session[SESSION_REFUND_ERROR] = str(exc)
 
     return redirect("cashier:home")
@@ -1097,6 +1257,10 @@ def order_refund(request: HttpRequest, public_id) -> HttpResponse:
 @require_http_methods(["POST"])
 def device_cash_confirm(request: HttpRequest, public_id) -> HttpResponse:
     if not _device_token_ok(request):
+        logger.warning(
+            "cashier_device_cash_confirm_invalid_token",
+            payment_id=str(public_id),
+        )
         return HttpResponseForbidden("invalid device token")
 
     payment = get_object_or_404(OrderPayment, public_id=public_id)
@@ -1107,9 +1271,20 @@ def device_cash_confirm(request: HttpRequest, public_id) -> HttpResponse:
         .first()
     )
     if session is None:
+        logger.warning(
+            "cashier_device_cash_confirm_no_open_session",
+            payment_id=str(payment.public_id),
+            org_id=str(payment.org.public_id),
+        )
         return HttpResponseForbidden("no open session")
 
     _confirm_cash_payment(payment=payment, actor=None, session=session)
+    logger.info(
+        "cashier_device_cash_confirm_succeeded",
+        payment_id=str(payment.public_id),
+        order_id=str(payment.order.public_id),
+        session_id=str(session.public_id),
+    )
     return HttpResponse("ok")
 
 
@@ -1117,6 +1292,10 @@ def device_cash_confirm(request: HttpRequest, public_id) -> HttpResponse:
 @require_http_methods(["POST"])
 def device_card_confirm(request: HttpRequest, public_id) -> HttpResponse:
     if not _device_token_ok(request):
+        logger.warning(
+            "cashier_device_card_confirm_invalid_token",
+            payment_id=str(public_id),
+        )
         return HttpResponseForbidden("invalid device token")
 
     payment = get_object_or_404(OrderPayment, public_id=public_id)
@@ -1127,9 +1306,20 @@ def device_card_confirm(request: HttpRequest, public_id) -> HttpResponse:
         .first()
     )
     if session is None:
+        logger.warning(
+            "cashier_device_card_confirm_no_open_session",
+            payment_id=str(payment.public_id),
+            org_id=str(payment.org.public_id),
+        )
         return HttpResponseForbidden("no open session")
 
     _confirm_card_payment(payment=payment, actor=None, session=session)
+    logger.info(
+        "cashier_device_card_confirm_succeeded",
+        payment_id=str(payment.public_id),
+        order_id=str(payment.order.public_id),
+        session_id=str(session.public_id),
+    )
     return HttpResponse("ok")
 
 

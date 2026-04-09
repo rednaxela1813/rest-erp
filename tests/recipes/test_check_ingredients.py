@@ -57,3 +57,57 @@ def test_prepared_product_hidden_when_ingredients_missing(admin_client, lot_fact
     #lot_factory(org=org, product=patty, quantity=Decimal("10"), status="active")
     
     assert has_enough_ingredients(burger) is False
+
+
+def test_product_without_recipe_is_available(admin_client):
+    client, user, org = admin_client
+
+    from apps.products.models import Product, TaxRate, Unit
+
+    unit = Unit.objects.create(org=org, name="pcs", status=Unit.STATUS_ACTIVE)
+    tax = TaxRate.objects.create(org=org, name="DPH 20%", rate=Decimal("20.00"), status=TaxRate.STATUS_ACTIVE)
+    product = Product.objects.create(
+        org=org,
+        name="Simple Burger",
+        status=Product.STATUS_ACTIVE,
+        product_type=Product.PRODUCT_TYPE_PREPARED,
+        unit=unit,
+        tax_rate=tax,
+        unit_price=Decimal("10.00"),
+    )
+
+    assert has_enough_ingredients(product) is True
+
+
+def test_prepared_product_visible_when_stock_equals_needed(admin_client, lot_factory):
+    client, user, org = admin_client
+
+    from apps.products.models import Product, TaxRate, Unit
+    from apps.recipes.models import Recipe, RecipeItem
+
+    unit = Unit.objects.create(org=org, name="pcs", status=Unit.STATUS_ACTIVE)
+    tax = TaxRate.objects.create(org=org, name="DPH 20%", rate=Decimal("20.00"), status=TaxRate.STATUS_ACTIVE)
+    ingredient = Product.objects.create(
+        org=org,
+        name="Bun",
+        status=Product.STATUS_ACTIVE,
+        product_type=Product.PRODUCT_TYPE_INGREDIENT,
+        unit=unit,
+        tax_rate=tax,
+        unit_price=Decimal("1.00"),
+    )
+    burger = Product.objects.create(
+        org=org,
+        name="Burger exact stock",
+        status=Product.STATUS_ACTIVE,
+        product_type=Product.PRODUCT_TYPE_PREPARED,
+        unit=unit,
+        tax_rate=tax,
+        unit_price=Decimal("10.00"),
+    )
+
+    recipe = Recipe.objects.create(org=org, name="Exact Recipe", product=burger)
+    RecipeItem.objects.create(org=org, recipe=recipe, product=ingredient, quantity=Decimal("2.000"))
+    lot_factory(org=org, product=ingredient, qty=Decimal("2.000"))
+
+    assert has_enough_ingredients(burger) is True

@@ -4,10 +4,12 @@ from datetime import datetime
 
 from django.db import transaction
 from django.utils import timezone
+import structlog
 
 from apps.inventory.models import StockLot, StockMovement
 from apps.accounting.logic.record_stock_receipt import record_stock_receipt
 
+logger = structlog.get_logger(__name__)
 
 
 def receive_stock(
@@ -30,6 +32,15 @@ def receive_stock(
     Создаёт StockLot и StockMovement(IN) в одной транзакции.
     Возвращает (lot, movement).
     """
+    logger.info(
+        "stock_receive_started",
+        org_id=str(org.public_id),
+        product_id=str(product.public_id),
+        product_name=product.name,
+        initial_qty=str(initial_qty),
+        unit_cost=str(unit_cost),
+        label_code=label_code,
+    )
     with transaction.atomic():
         lot = StockLot.objects.create(
             org=org,
@@ -62,4 +73,15 @@ def receive_stock(
         
         record_stock_receipt(lot=lot)  # связать с функцией, которая создаёт запись в бухгалтерии
 
+    logger.info(
+        "stock_receive_succeeded",
+        org_id=str(org.public_id),
+        product_id=str(product.public_id),
+        product_name=product.name,
+        lot_id=str(lot.id),
+        movement_id=str(movement.id),
+        received_qty=str(initial_qty),
+        remaining_qty=str(lot.remaining_qty),
+        label_code=lot.label_code,
+    )
     return lot, movement

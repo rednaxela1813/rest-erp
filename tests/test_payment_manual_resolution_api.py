@@ -98,3 +98,27 @@ def test_manual_resolution_requires_admin(member_client):
         content_type="application/json",
     )
     assert resp.status_code == 403
+
+
+@pytest.mark.django_db
+def test_manual_resolution_requires_at_least_one_field(admin_client):
+    client, user, org = admin_client
+    order = Order.objects.create(org=org)
+    payment = OrderPayment.objects.create(
+        org=org,
+        order=order,
+        tender=OrderPayment.Tender.CARD,
+        status=OrderPayment.Status.AUTHORIZED,
+        amount=Decimal("5.00"),
+        currency="EUR",
+        provider="manual",
+    )
+
+    resp = client.post(
+        f"/api/v1/payments/{payment.public_id}/manual-resolution/",
+        data={},
+        content_type="application/json",
+    )
+
+    assert resp.status_code == 400, resp.content
+    assert resp.json()["detail"] == ["At least one field is required."]

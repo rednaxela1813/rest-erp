@@ -17,8 +17,15 @@ class EkasaClient:
     Uses stdlib urllib to avoid extra dependencies.
     """
 
-    def __init__(self, *, base_url: str | None = None, timeout_s: int | None = None):
+    def __init__(
+        self,
+        *,
+        base_url: str | None = None,
+        api_key: str | None = None,
+        timeout_s: int | None = None,
+    ):
         self.base_url = (base_url if base_url is not None else settings.EKASA_BASE_URL).rstrip("/")
+        self.api_key = api_key if api_key is not None else settings.EKASA_API_KEY
         self.timeout_s = timeout_s if timeout_s is not None else settings.EKASA_TIMEOUT_S
 
     def register_cash_register(self, *, payload: dict) -> dict[str, Any]:
@@ -37,6 +44,8 @@ class EkasaClient:
             "Content-Type": "application/json",
             "Accept": "application/json",
         }
+        if self.api_key:
+            headers["X-API-Key"] = self.api_key
 
         # If the local eKasa service requires HTTP Basic auth, set these in env.
         username = settings.EKASA_USERNAME

@@ -6,8 +6,18 @@ from django.conf import settings
 from django.db import models, transaction
 from django.db.models import Q
 from django.utils import timezone
+import structlog
 
 from apps.payments.models import DeviceCommand
+
+logger = structlog.get_logger(__name__)
+
+
+_MANUAL_RETRY_ONLY_COMMAND_TYPES = [
+    DeviceCommand.Type.FISCALIZE_SALE,
+    DeviceCommand.Type.FISCALIZE_REFUND,
+    DeviceCommand.Type.FISCALIZE_STORNO,
+]
 
 
 def _compute_retry_delay_seconds(retries: int) -> int:
@@ -26,6 +36,12 @@ def pull_device_commands(*, org, limit: int = 50, command_types: list[str] | Non
 
     This prevents multiple agents from executing the same command concurrently.
     """
+    logger.info(
+        "device_commands_pull_started",
+        org_id=str(org.public_id),
+        limit=limit,
+        command_types=command_types or [],
+    )
     with transaction.atomic():
         now = timezone.now()
         # Lock only the rows we are going to take, and skip rows locked by other agents.
@@ -55,6 +71,12 @@ def pull_device_commands(*, org, limit: int = 50, command_types: list[str] | Non
             for cmd in commands:
                 cmd.status = DeviceCommand.Status.SENT
 
+        logger.info(
+            "device_commands_pull_succeeded",
+            org_id=str(org.public_id),
+            pulled_count=len(commands),
+            command_ids=[str(cmd.public_id) for cmd in commands],
+        )
         return commands
 
 
@@ -62,6 +84,12 @@ def ack_device_command(*, command: DeviceCommand, status: str, error: str = "") 
     """
     Update command status based on Local Agent feedback.
     """
+    logger.info(
+        "device_command_ack_started",
+        command_id=str(command.public_id),
+        current_status=command.status,
+        new_status=status,
+    )
     # Persist agent result. FAILED increments retries and stores the error for audit.
     command.status = status
     if status == DeviceCommand.Status.FAILED:
@@ -73,21 +101,49 @@ def ack_device_command(*, command: DeviceCommand, status: str, error: str = "") 
         else:
             command.next_attempt_at = None
     command.save(update_fields=["status", "last_error", "retries", "next_attempt_at", "updated_at"])
+    logger.info(
+        "device_command_ack_succeeded",
+        command_id=str(command.public_id),
+        status=command.status,
+        retries=command.retries,
+        has_next_attempt=command.next_attempt_at is not None,
+    )
     return command
 
 
 def release_due_device_commands(*, org) -> int:
     """
-    Move FAILED commands back to PENDING when their retry delay has passed.
+    Move retryable commands back to PENDING when they are due again.
+
+    This also recovers commands stuck in SENT after an agent/request crash.
     """
     now = timezone.now()
-    return (
+    stale_sent_before = now - timedelta(
+        seconds=getattr(settings, "DEVICE_COMMANDS_RETRY_BASE_SECONDS", 10)
+    )
+    released = (
         DeviceCommand.objects
         .filter(
             org=org,
-            status=DeviceCommand.Status.FAILED,
             retries__lt=models.F("max_retries"),
         )
-        .filter(Q(next_attempt_at__isnull=True) | Q(next_attempt_at__lte=now))
+        .exclude(command_type__in=_MANUAL_RETRY_ONLY_COMMAND_TYPES)
+        .filter(
+            Q(
+                status=DeviceCommand.Status.FAILED,
+                next_attempt_at__isnull=False,
+                next_attempt_at__lte=now,
+            )
+            | Q(
+                status=DeviceCommand.Status.SENT,
+                updated_at__lte=stale_sent_before,
+            )
+        )
         .update(status=DeviceCommand.Status.PENDING)
     )
+    logger.info(
+        "device_commands_release_due_completed",
+        org_id=str(org.public_id),
+        released_count=released,
+    )
+    return released

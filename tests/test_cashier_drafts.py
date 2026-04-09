@@ -225,7 +225,8 @@ def test_logout_closes_open_shift_with_current_cash(client, user_factory, org_fa
 
 
 @pytest.mark.django_db
-def test_cashier_refund_paid_order_enqueues_refund_command(client, user_factory, org_factory):
+def test_cashier_refund_paid_order_enqueues_refund_command(client, user_factory, org_factory, settings):
+    settings.EKASA_ENABLED = False
     user = user_factory(email="cashier@example.com")
     org = org_factory(name="Cashier Org")
     OrganizationMember.objects.create(org=org, user=user, role="member")
@@ -268,3 +269,125 @@ def test_cashier_refund_paid_order_enqueues_refund_command(client, user_factory,
         command_type=DeviceCommand.Type.FISCALIZE_REFUND,
     ).first()
     assert refund_cmd is not None
+
+
+@pytest.mark.django_db
+def test_session_open_requires_valid_org_and_terminal_selection(client, user_factory, org_factory):
+    user = user_factory(email="cashier@example.com")
+    org = org_factory(name="Cashier Org")
+    OrganizationMember.objects.create(org=org, user=user, role="member")
+    client.force_login(user)
+
+    resp = client.post(
+        "/cashier/session/open/",
+        data={"org_id": str(org.public_id), "terminal_id": "999999", "opening_cash": "10.00"},
+    )
+
+    assert resp.status_code == 200
+    assert b"Select organization and terminal." in resp.content
+
+
+@pytest.mark.django_db
+def test_session_open_rejects_terminal_with_other_cashier_session(client, user_factory, org_factory):
+    user_1 = user_factory(email="cashier1@example.com")
+    user_2 = user_factory(email="cashier2@example.com")
+    org = org_factory(name="Cashier Org")
+    OrganizationMember.objects.create(org=org, user=user_1, role="member")
+    OrganizationMember.objects.create(org=org, user=user_2, role="member")
+    terminal = Terminal.objects.create(org=org, name="POS 1", code="pos-1", status=Terminal.STATUS_ACTIVE)
+    CashierSession.objects.create(
+        org=org,
+        terminal=terminal,
+        cashier=user_1,
+        cash_drawer_start=Decimal("0.00"),
+    )
+
+    client.force_login(user_2)
+
+    resp = client.post(
+        "/cashier/session/open/",
+        data={"org_id": str(org.public_id), "terminal_id": str(terminal.id), "opening_cash": "10.00"},
+    )
+
+    assert resp.status_code == 200
+    assert b"Terminal already has an open session." in resp.content
+
+
+@pytest.mark.django_db
+def test_device_cash_confirm_rejects_invalid_device_token(client, user_factory, org_factory, settings):
+    user = user_factory(email="cashier@example.com")
+    org = org_factory(name="Cashier Org")
+    OrganizationMember.objects.create(org=org, user=user, role="member")
+    session = _prepare_cashier_session(client=client, org=org, user=user)
+    product = _prepare_product(org=org)
+    order = Order.objects.create(org=org, status=Order.STATUS_DRAFT)
+    OrderItem.objects.create(
+        order=order,
+        product=product,
+        product_name=product.name,
+        qty=Decimal("1.000"),
+        unit=product.unit,
+        unit_price=product.unit_price,
+        tax_rate=product.tax_rate,
+    )
+    order.recompute_totals()
+    order.save(update_fields=["subtotal", "tax_total", "total", "updated_at"])
+    payment = OrderPayment.objects.create(
+        org=org,
+        order=order,
+        terminal=session.terminal,
+        tender=OrderPayment.Tender.CASH,
+        status=OrderPayment.Status.PENDING,
+        amount=order.total,
+        currency="EUR",
+        provider="manual",
+    )
+
+    settings.CASHIER_DEVICE_TOKEN = "secret-token"
+    resp = client.post(
+        f"/cashier/device/payments/{payment.public_id}/cash/",
+        HTTP_X_DEVICE_TOKEN="wrong-token",
+    )
+
+    assert resp.status_code == 403
+    assert b"invalid device token" in resp.content
+
+
+@pytest.mark.django_db
+def test_device_card_confirm_requires_open_session(client, user_factory, org_factory, settings):
+    user = user_factory(email="cashier@example.com")
+    org = org_factory(name="Cashier Org")
+    OrganizationMember.objects.create(org=org, user=user, role="member")
+    terminal = Terminal.objects.create(org=org, name="POS 1", code="pos-1", status=Terminal.STATUS_ACTIVE)
+    product = _prepare_product(org=org)
+    order = Order.objects.create(org=org, status=Order.STATUS_DRAFT)
+    OrderItem.objects.create(
+        order=order,
+        product=product,
+        product_name=product.name,
+        qty=Decimal("1.000"),
+        unit=product.unit,
+        unit_price=product.unit_price,
+        tax_rate=product.tax_rate,
+    )
+    order.recompute_totals()
+    order.save(update_fields=["subtotal", "tax_total", "total", "updated_at"])
+    payment = OrderPayment.objects.create(
+        org=org,
+        order=order,
+        terminal=terminal,
+        tender=OrderPayment.Tender.CARD,
+        status=OrderPayment.Status.PENDING,
+        amount=order.total,
+        currency="EUR",
+        provider="manual",
+    )
+
+    settings.CASHIER_DEVICE_TOKEN = "secret-token"
+    resp = client.post(
+        f"/cashier/device/payments/{payment.public_id}/card/",
+        HTTP_X_DEVICE_TOKEN="secret-token",
+    )
+
+    assert resp.status_code == 403
+    assert b"no open session" in resp.content

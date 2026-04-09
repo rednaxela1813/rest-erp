@@ -1,9 +1,11 @@
 #project/backend/apps/recipes/admin.py
-from urllib import request
+import structlog
 
 from django.contrib import admin
 from .models import Recipe, RecipeItem
 from apps.products.models import Unit, Product
+
+logger = structlog.get_logger(__name__)
 
 
 class RecipeItemInline(admin.TabularInline):
@@ -11,7 +13,7 @@ class RecipeItemInline(admin.TabularInline):
     extra = 1
     
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
-        print(f"DEBUG: db_field.name = {db_field.name}")
+        logger.info("recipe_admin_formfield_resolved", field_name=db_field.name)
         if db_field.name == "unit":
             kwargs["queryset"] = Unit.objects.all()
         if db_field.name == "product":
@@ -30,4 +32,3 @@ class RecipeAdmin(admin.ModelAdmin):
 class RecipeItemAdmin(admin.ModelAdmin):
     list_display = ("id", "recipe", "product", "quantity")
     search_fields = ("recipe__name", "product__name")   
-

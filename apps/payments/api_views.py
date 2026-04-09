@@ -1,5 +1,6 @@
 from rest_framework.permissions import IsAuthenticated
 from decimal import Decimal
+import structlog
 
 from rest_framework import serializers
 from rest_framework import status as drf_status
@@ -17,6 +18,8 @@ from apps.orders.models import Order
 from django.shortcuts import get_object_or_404
 from django.db.models import Count
 
+logger = structlog.get_logger(__name__)
+
 
 class PaymentStartSerializer(serializers.Serializer):
     order = serializers.UUIDField()
@@ -33,6 +36,12 @@ class PaymentStartSerializer(serializers.Serializer):
         attrs["order_obj"] = order
 
         if order.total != attrs["amount"]:
+            logger.warning(
+                "payment_start_amount_mismatch",
+                order_id=str(order.public_id),
+                expected_amount=str(order.total),
+                provided_amount=str(attrs["amount"]),
+            )
             raise serializers.ValidationError({"amount": ["Amount must match order total."]})
 
         return attrs
@@ -55,6 +64,12 @@ class PaymentStartApi(APIView):
             currency=serializer.validated_data["currency"],
             idempotency_key=idempotency_key,
         )
+        logger.info(
+            "payment_start_api_succeeded",
+            payment_id=str(payment.public_id),
+            order_id=str(payment.order.public_id),
+            user_id=str(request.user.id),
+        )
 
         return Response(
             {
@@ -73,6 +88,12 @@ class PaymentCaptureApi(APIView):
     def post(self, request, public_id):
         org = get_request_org(request)
         payment = get_object_or_404(OrderPayment, org=org, public_id=public_id)
+        logger.info(
+            "payment_capture_api_requested",
+            payment_id=str(payment.public_id),
+            order_id=str(payment.order.public_id),
+            user_id=str(request.user.id),
+        )
 
         payment = capture_payment(payment=payment, actor=request.user)
         payment.refresh_from_db()
@@ -130,6 +151,12 @@ class DeviceCommandPullApi(APIView):
         org = get_request_org(request)
         # Default batch size keeps agent load predictable.
         limit = int(request.query_params.get("limit", "50"))
+        logger.info(
+            "device_command_pull_api_requested",
+            org_id=str(org.public_id),
+            user_id=str(request.user.id),
+            limit=limit,
+        )
 
         # Pull will lock and mark commands as SENT to avoid duplicates.
         commands = pull_device_commands(org=org, limit=limit)
@@ -156,6 +183,13 @@ class DeviceCommandAckApi(APIView):
             command=command,
             status=serializer.validated_data["status"],
             error=serializer.validated_data.get("error", ""),
+        )
+        logger.info(
+            "device_command_ack_api_succeeded",
+            org_id=str(org.public_id),
+            user_id=str(request.user.id),
+            command_id=str(command.public_id),
+            status=serializer.validated_data["status"],
         )
 
         return Response(status=drf_status.HTTP_204_NO_CONTENT)
@@ -209,6 +243,7 @@ class PaymentManualResolutionSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         if not attrs:
+            logger.warning("payment_manual_resolution_empty_payload")
             raise serializers.ValidationError(
                 {"detail": ["At least one field is required."]}
             )
@@ -240,6 +275,13 @@ class PaymentManualResolutionApi(APIView):
         for field, value in updates.items():
             setattr(payment, field, value)
         payment.save(update_fields=[*updates.keys(), "updated_at"])
+        logger.info(
+            "payment_manual_resolution_api_updated",
+            org_id=str(org.public_id),
+            user_id=str(request.user.id),
+            payment_id=str(payment.public_id),
+            updated_fields=sorted(updates.keys()),
+        )
 
         return Response(
             {

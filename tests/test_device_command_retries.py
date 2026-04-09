@@ -96,6 +96,64 @@ def test_release_due_device_commands_moves_failed_to_pending(org_factory):
 
 
 @pytest.mark.django_db
+def test_release_due_device_commands_requeues_stale_sent_commands(org_factory, settings):
+    settings.DEVICE_COMMANDS_RETRY_BASE_SECONDS = 10
+
+    org = org_factory()
+    order = Order.objects.create(org=org)
+
+    stale_sent = DeviceCommand.objects.create(
+        org=org,
+        order=order,
+        command_type=DeviceCommand.Type.PRINT_KOT,
+        idempotency_key="retry:stale-sent",
+        status=DeviceCommand.Status.SENT,
+    )
+    fresh_sent = DeviceCommand.objects.create(
+        org=org,
+        order=order,
+        command_type=DeviceCommand.Type.PRINT_RECEIPT,
+        idempotency_key="retry:fresh-sent",
+        status=DeviceCommand.Status.SENT,
+    )
+    DeviceCommand.objects.filter(id=stale_sent.id).update(
+        updated_at=timezone.now() - timedelta(seconds=30)
+    )
+
+    released = release_due_device_commands(org=org)
+
+    stale_sent.refresh_from_db()
+    fresh_sent.refresh_from_db()
+
+    assert released == 1
+    assert stale_sent.status == DeviceCommand.Status.PENDING
+    assert fresh_sent.status == DeviceCommand.Status.SENT
+
+
+@pytest.mark.django_db
+def test_release_due_device_commands_does_not_requeue_failed_fiscal_commands(org_factory):
+    org = org_factory()
+    order = Order.objects.create(org=org)
+
+    failed_fiscal = DeviceCommand.objects.create(
+        org=org,
+        order=order,
+        command_type=DeviceCommand.Type.FISCALIZE_SALE,
+        idempotency_key="retry:failed-fiscal",
+        status=DeviceCommand.Status.FAILED,
+        retries=1,
+        max_retries=5,
+        next_attempt_at=timezone.now() - timedelta(seconds=5),
+    )
+
+    released = release_due_device_commands(org=org)
+
+    failed_fiscal.refresh_from_db()
+    assert released == 0
+    assert failed_fiscal.status == DeviceCommand.Status.FAILED
+
+
+@pytest.mark.django_db
 def test_pull_device_commands_skips_future_next_attempt(org_factory):
     org = org_factory()
     order = Order.objects.create(org=org)

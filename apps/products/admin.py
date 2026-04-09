@@ -62,6 +62,7 @@ class ProductAdmin(admin.ModelAdmin):
         "unit_price",
         "unit",
         "tax_rate",
+        "product_type",
        
     )
     search_fields = ("name", "barcode", "org__name")
