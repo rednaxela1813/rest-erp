@@ -1,0 +1,87 @@
+flowchart TD
+  %% To-be: target payments architecture
+  %% Goals: explicit state transitions, event sourcing, provider abstraction, and resilient device workflow.
+
+  %% API layer
+  A1[API: /payments/start] --> L1[start_payment]
+  A2[API: /payments/:id/authorize] --> L11[authorize_payment]
+  A3[API: /payments/:id/capture] --> L2[capture_payment]
+  A4[API: /payments/:id/refund] --> L20[refund_payment]
+  A5[API: /payments/:id/status] --> L3[PaymentStatusApi]
+  A6[API: /payments/:id/manual-resolution] --> L4[ManualResolution]
+
+  A7[API: /device/commands/pull] --> L5[pull_device_commands]
+  A8[API: /device/commands/:id/ack] --> L6[ack_device_command]
+  A9[API: /health/fiscal-receipts] --> L7[FiscalReceiptsHealthApi]
+  A10[API: /shifts/open] --> L8[open_shift]
+  A11[API: /shifts/:id/close] --> L9[close_shift]
+  A12[API: /shifts/:id/report] --> L10[shift_report]
+
+  %% Core models
+  M1[(OrderPayment)]
+  M2[(DeviceCommand)]
+  M3[(FiscalReceipt)]
+  M4[(CashierSession)]
+  M5[(Terminal)]
+  M6[(PaymentProviderConfig)]
+  M7[(PaymentEvent)]
+  M8[(CashDrawerMovement)]
+
+  %% Payment lifecycle
+  L1 --> M1
+  L11 --> M1
+  L2 --> M1
+  L20 --> M1
+
+  %% Provider abstraction
+  P1[Provider Registry] --> P2[Card Provider]
+  P1 --> P3[Online Provider]
+  P1 --> P4[Cash Provider]
+  M6 -.-> P1
+  L11 -->|provider.authorize| P1
+  L2 -->|provider.capture| P1
+  L20 -->|provider.refund| P1
+
+  %% Event sourcing / audit trail
+  L1 --> M7
+  L11 --> M7
+  L2 --> M7
+  L20 --> M7
+  L4 --> M7
+
+  %% Device workflow (outbox pattern)
+  L2 --> L12[enqueue_payment_commands]
+  L20 --> L13[enqueue_refund_commands]
+  L12 --> M2
+  L13 --> M2
+
+  L5 --> M2
+  L6 --> M2
+
+  %% Streaming + agent execution
+  T1[Celery: dispatch_device_commands] --> L5
+  T1 --> S1[Redis Stream]
+  S1 --> LA[Local Agent]
+  LA --> L6
+
+  %% Fiscal documents
+  L2 --> M3
+  L20 --> M3
+
+  %% Reconciliation / resilience
+  T2[Celery: reconcile_payment_capture] --> P1
+  T2 --> M1
+  T3[Celery: reconcile_payment_fiscal_status] --> M2
+  T3 --> M1
+
+  %% Shifts & cash
+  L8 --> M4
+  L9 --> M4
+  L10 --> M4
+  M4 --> M5
+  M4 --> M8
+
+  %% Status & health
+  L3 --> M1
+  L3 --> M2
+  L7 --> M2

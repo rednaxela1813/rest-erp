@@ -1,0 +1,76 @@
+flowchart TD
+  %% API layer
+  A1[API: /payments/start] --> L1[start_payment]
+  A2[API: /payments/:id/capture] --> L2[capture_payment]
+  A3[API: /payments/:id/status] --> L3[PaymentStatusApi]
+  A4[API: /payments/:id/manual-resolution] --> L4[ManualResolution]
+  A5[API: /device/commands/pull] --> L5[pull_device_commands]
+  A6[API: /device/commands/:id/ack] --> L6[ack_device_command]
+  A7[API: /health/fiscal-receipts] --> L7[FiscalReceiptsHealthApi]
+  A8[API: /shifts/open] --> L8[open_shift]
+  A9[API: /shifts/:id/close] --> L9[close_shift]
+  A10[API: /shifts/:id/report] --> L10[shift_report]
+
+  %% Core domain models
+  M1[(OrderPayment)]
+  M2[(DeviceCommand)]
+  M3[(FiscalReceipt)]
+  M4[(CashierSession)]
+  M5[(Terminal)]
+  M6[(PaymentProviderConfig)]
+  M7[(PaymentEvent)]
+  M8[(CashDrawerMovement)]
+
+  %% Payment init
+  L1 --> M1
+  L1 -->|idempotency_key| M1
+
+  %% Authorize (external orchestration)
+  L11[authorize_payment] --> M1
+  L11 -->|provider.authorize| P1[Provider Registry]
+
+  %% Capture
+  L2 -->|provider.capture| P1
+  L2 --> M1
+  L2 --> O1[finalize_paid_order]
+  L2 --> M3
+  L2 --> L12[enqueue_payment_commands]
+  L12 --> M2
+
+  %% Device command lifecycle
+  L5 --> M2
+  L6 --> M2
+  L5 --> S1[Redis Stream]
+  S1 --> LA[Local Agent]
+  LA --> L6
+
+  %% Streaming + tasks
+  T1[Celery: dispatch_device_commands] --> L5
+  T1 --> S1
+  T2[Celery: reconcile_payment_capture] --> P1
+  T2 --> M1
+  T3[Celery: reconcile_payment_fiscal_status] --> M2
+  T3 --> M1
+
+  %% Shifts & cash
+  L8 --> M4
+  L9 --> M4
+  L10 --> M4
+  L10 --> M1
+  M4 --> M5
+  M4 --> M8
+
+  %% Status & health
+  L3 --> M1
+  L3 --> M2
+  L7 --> M2
+
+  %% Events (audit trail)
+  M1 -.-> M7
+  L11 -.-> M7
+  L2 -.-> M7
+  L4 -.-> M7
+
+  %% Provider registry
+  P1 --> P2[ManualProvider]
+  M6 -.-> P1

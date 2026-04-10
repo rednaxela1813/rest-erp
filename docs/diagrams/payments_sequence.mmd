@@ -1,0 +1,31 @@
+sequenceDiagram
+  autonumber
+  participant API as API
+  participant Auth as authorize_payment
+  participant Pay as OrderPayment
+  participant Prov as Provider
+  participant Cap as capture_payment
+  participant DC as DeviceCommand
+  participant Redis as Redis Stream
+  participant Agent as Local Agent
+  participant Recon as reconcile_payment_fiscal_status
+
+  API->>Auth: request authorize (external flow)
+  Auth->>Pay: validate status pending
+  Auth->>Prov: provider.authorize
+  Prov-->>Auth: payload
+  Auth->>Pay: status=authorized
+
+  API->>Cap: capture payment
+  Cap->>Pay: validate status authorized
+  Cap->>Prov: provider.capture
+  Prov-->>Cap: payload
+  Cap->>Pay: status=captured
+  Cap->>DC: enqueue_payment_commands
+
+  DC->>Redis: dispatch_device_commands (Celery)
+  Redis-->>Agent: stream commands
+  Agent->>DC: ACK/FAIL via API
+
+  Recon->>DC: read fiscal commands
+  Recon->>Pay: set fiscal_status (pending/confirmed/failed)

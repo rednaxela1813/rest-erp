@@ -1,14 +1,18 @@
 # ERP for Burger
 
-A monorepo for a restaurant ERP/POS built on Django. The project now covers more than a basic catalog and ordering flow: it includes organization-level data isolation, a cashier UI, payments, fiscalization, inventory, recipes, accounting entries, and internal operations dashboards.
+A restaurant ERP/POS built on Django. The repository covers more than a basic catalog and ordering flow: it includes organization-level data isolation, a cashier UI, payments, fiscalization, inventory, recipes, accounting entries, and internal operations dashboards.
 
 ## Repository Contents
 
-- `backend/` — the main Django backend: REST API, cashier UI built with Django templates + HTMX, Celery tasks, and domain logic
+- `apps/` — domain applications: orders, payments, cashier, inventory, products, accounting, and supporting modules
+- `config/` — users, organizations, dictionaries, observability, and shared config
+- `core/` — Django settings, Celery bootstrap, and root URL configuration
+- `tests/` — project-wide pytest coverage
 - `docs/diagrams/` — diagrams for payment and fiscal flows
-- `CASHIER_GUIDE.md` — a short cashier cheat sheet for non-standard situations
-- `OPERATIONS_GUIDE.md` — operational procedures for admins during payment and fiscalization issues
-- `Roadmap.md` — the historical MVP roadmap; useful as background, but it no longer reflects the current scope of the system
+- `docs/screenshots/` — cashier UI screenshots used in documentation
+- `docs/CASHIER_GUIDE.md` — a short cashier cheat sheet for non-standard situations
+- `docs/OPERATIONS_GUIDE.md` — operational procedures for admins during payment and fiscalization issues
+- `docs/Roadmap.md` — the historical MVP roadmap; useful as background, but it no longer reflects the current scope of the system
 
 ## Current Functional Scope
 
@@ -39,32 +43,28 @@ The project currently includes:
 ## Structure
 
 ```text
-project/
-├── backend/
-│   ├── apps/
-│   ├── config/
-│   ├── core/
-│   ├── tests/
-│   ├── docker-compose.yml
-│   ├── manage.py
-│   ├── requirements.txt
-│   └── .env.example
+backend/
+├── apps/
+├── config/
+├── core/
 ├── docs/
 │   ├── diagrams/
 │   └── screenshots/
-├── CASHIER_GUIDE.md
-├── OPERATIONS_GUIDE.md
-├── README.md
-└── Roadmap.md
+├── tests/
+├── docker-compose.yml
+├── manage.py
+├── requirements.txt
+├── .env.example
+└── README.md
 ```
 
 ## Where To Start
 
 If you need a quick orientation:
 
-1. Review [CASHIER_GUIDE.md](/Users/alexanderkiselev/Documents/programming/django/erp_for_burger/project/CASHIER_GUIDE.md) and [OPERATIONS_GUIDE.md](/Users/alexanderkiselev/Documents/programming/django/erp_for_burger/project/OPERATIONS_GUIDE.md).
-2. Open [docs/diagrams/payments_overview.svg](/Users/alexanderkiselev/Documents/programming/django/erp_for_burger/project/docs/diagrams/payments_overview.svg) and [docs/diagrams/payments_sequence.svg](/Users/alexanderkiselev/Documents/programming/django/erp_for_burger/project/docs/diagrams/payments_sequence.svg).
-3. Use the sections below for backend setup, routes, and operations.
+1. Review [docs/CASHIER_GUIDE.md](/Users/alexanderkiselev/Documents/programming/django/erp_for_burger/project/backend/docs/CASHIER_GUIDE.md) and [docs/OPERATIONS_GUIDE.md](/Users/alexanderkiselev/Documents/programming/django/erp_for_burger/project/backend/docs/OPERATIONS_GUIDE.md).
+2. Open [docs/diagrams/payments_overview.svg](/Users/alexanderkiselev/Documents/programming/django/erp_for_burger/project/backend/docs/diagrams/payments_overview.svg) and [docs/diagrams/payments_sequence.svg](/Users/alexanderkiselev/Documents/programming/django/erp_for_burger/project/backend/docs/diagrams/payments_sequence.svg).
+3. Use the sections below for setup, routes, and operations.
 
 ## Cashier Screenshots
 
@@ -94,10 +94,9 @@ Cashier flow with product images:
 
 ## Running The Project
 
-From `project/backend`:
+From the repository root:
 
 ```bash
-cd project/backend
 cp .env.example .env
 docker compose up --build
 ```
@@ -121,7 +120,6 @@ Once started:
 You need PostgreSQL and Redis available separately.
 
 ```bash
-cd project/backend
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
@@ -268,7 +266,7 @@ python manage.py createsuperuser
 
 ## Environment Variables
 
-Template: [backend/.env.example](/Users/alexanderkiselev/Documents/programming/django/erp_for_burger/project/backend/.env.example)
+Template: [.env.example](/Users/alexanderkiselev/Documents/programming/django/erp_for_burger/project/backend/.env.example)
 
 Required or important variables:
 
@@ -311,7 +309,6 @@ By default the project expects PostgreSQL and Redis. For local non-Docker runs, 
 Pytest is configured against `core.settings.dev`.
 
 ```bash
-cd project/backend
 pytest
 ```
 
@@ -345,9 +342,9 @@ Important: the backend is not itself the local device agent. It publishes comman
 
 - Not every domain has a dedicated public REST API yet, even where the model and business logic are already implemented.
 - Full payment and fiscal async-flow testing requires Redis, Celery worker, and Celery beat.
-- `Roadmap.md` reflects only the original MVP plan and is behind the actual codebase state.
+- [docs/Roadmap.md](/Users/alexanderkiselev/Documents/programming/django/erp_for_burger/project/backend/docs/Roadmap.md) reflects only the original MVP plan and is behind the actual codebase state.
 
 ## Documentation Status
 
-- This root `README` is now the single documentation entry point for the repository.
-- `Roadmap.md` should not be used as a description of the current system state; it is an archived MVP plan.
+- This `README` is the single documentation entry point for the repository.
+- Operational guides and diagrams live under `docs/`.

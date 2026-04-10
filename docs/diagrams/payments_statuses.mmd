@@ -1,0 +1,40 @@
+stateDiagram-v2
+  direction LR
+
+  state "OrderPayment.status" as OPS {
+    [*] --> pending
+    pending --> authorized: authorize_payment
+    authorized --> captured: capture_payment
+    pending --> failed: external
+    authorized --> failed: external
+    pending --> cancelled: external
+    authorized --> cancelled: external
+  }
+
+  state "OrderPayment.capture_status" as OCS {
+    [*] --> pending
+    pending --> confirmed: reconcile/manual
+    pending --> timeout: reconcile/manual
+    confirmed --> timeout: manual
+    timeout --> confirmed: manual
+  }
+
+  state "OrderPayment.fiscal_status" as OFS {
+    [*] --> pending
+    pending --> confirmed: reconcile/manual
+    pending --> failed: reconcile/manual
+    failed --> confirmed: manual
+  }
+
+  state "DeviceCommand.status" as DCS {
+    [*] --> pending
+    pending --> sent: pull_device_commands
+    sent --> acked: ack_device_command
+    sent --> failed: ack_device_command
+    failed --> pending: release_due_device_commands
+  }
+
+  state "CashierSession.status" as CSS {
+    [*] --> open: open_shift
+    open --> closed: close_shift
+  }
