@@ -764,6 +764,67 @@ def cart_clear(request: HttpRequest) -> HttpResponse:
     }
     return render(request, "cashier/partials/cart.html", context)
 
+# Добавить в apps/cashier/views.py
+# Место вставки: после функции cart_clear (строка ~749)
+
+@login_required
+@require_http_methods(["POST"])
+def cart_restore(request: HttpRequest) -> HttpResponse:
+    """
+    Восстанавливает корзину из резервной копии localStorage.
+
+    Принимает JSON-список [{id, qty}, ...] в поле 'items'.
+    Валидирует каждый продукт (существование, unit, tax_rate).
+    Возвращает обновлённый cart.html partial — как все остальные cart-endpoints.
+
+    Вызывается из JS: htmx.ajax("POST", "/cashier/cart/restore/", ...)
+    """
+    session = _get_active_session(request)
+    if not session:
+        return redirect("cashier:session_open")
+
+    raw = request.POST.get("items", "[]")
+    try:
+        items_data = json.loads(raw)
+    except (json.JSONDecodeError, ValueError):
+        items_data = []
+
+    cart = {}
+    for entry in items_data:
+        try:
+            product_id = int(entry.get("id", 0))
+            qty = max(1, int(entry.get("qty", 1)))
+        except (TypeError, ValueError):
+            continue
+
+        # Проверяем что продукт существует и принадлежит этой org
+        try:
+            product = Product.objects.get(id=product_id, org=session.org)
+        except Product.DoesNotExist:
+            continue
+
+        # Пропускаем продукты без unit или tax_rate — они не могут быть в чеке
+        if not product.unit or not product.tax_rate:
+            continue
+
+        cart[str(product_id)] = cart.get(str(product_id), 0) + qty
+
+    request.session[SESSION_CART] = cart
+    _reset_checkout_idempotency(request.session)
+    request.session.modified = True
+
+    items = _cart_items(cart, session.org)
+    totals = _cart_totals(items)
+    context = {
+        "org": session.org,
+        "cart_items": items,
+        "cart_count": sum(cart.values()) if cart else 0,
+        "totals": totals,
+        "currency": settings.DEFAULT_CURRENCY,
+        "cart_error": "",
+    }
+    return render(request, "cashier/partials/cart.html", context)
+
 
 @login_required
 @require_http_methods(["GET"])

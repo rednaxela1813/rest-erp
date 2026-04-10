@@ -23,7 +23,15 @@
   {% if cart_items %}
     <div class="pos-cart-list">
       {% for item in cart_items %}
-        <div class="pos-cart-item">
+        {% comment %} {#
+          data-product-id, data-name, data-qty, data-price — читаются JS-ом
+          в readCartFromDOM() для сохранения резервной копии в localStorage.
+        #} {% endcomment %}
+        <div class="pos-cart-item"
+             data-product-id="{{ item.product.id }}"
+             data-name="{{ item.product.name }}"
+             data-qty="{{ item.qty }}"
+             data-price="{{ item.product.unit_price }}">
           <div>
             <div class="pos-cart-name">{{ item.product.name }}</div>
             <div class="pos-cart-meta">

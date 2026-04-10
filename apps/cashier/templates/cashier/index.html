@@ -7,6 +7,10 @@
       <div class="pos-brand">Burger Ops</div>
       <div class="pos-subtitle">Cashier console · shift is open</div>
     </div>
+
+    {# Бейдж состояния сети — обновляется JS-ом через updateNetworkUI() #}
+    <span id="pos-net-badge" class="pos-net-badge is-online">Online</span>
+
     <div class="pos-session-card">
       <div class="pos-session-title">{{ org.name }}</div>
       <div class="pos-session-meta">
@@ -24,17 +28,27 @@
       <div class="pos-session-actions">
         <a class="pos-btn pos-btn-outline" href="{% url 'cashier:kitchen_board' %}">Kitchen</a>
       </div>
-      
-        {% comment %} Кнопка закрытия смены ведёт на страницу Z-отчёта (GET session/close/),
-        а не сразу разлогинивает. Кассир сначала видит итоги смены,
-        затем явно подтверждает закрытие кнопкой на той странице.
-
-        Старый вариант (прямой logout) оставлен в cashier_logout() и используется
-        со страницы открытия смены (session_open.html) как аварийный выход. {% endcomment %}
-      
       <a class="pos-btn pos-btn-ghost" href="{% url 'cashier:session_close' %}">Close shift</a>
     </div>
   </header>
+
+  {# Баннер оффлайн — появляется когда нет сети #}
+  <div id="pos-offline-banner" class="pos-offline-banner" role="alert">
+    <span>&#9888;</span>
+    <span>No internet connection. Card payments are unavailable. Cash payments will be queued when connection is restored.</span>
+  </div>
+
+  {# Баннер восстановления корзины — появляется если в localStorage есть несохранённые данные #}
+  <div id="pos-restore-banner" class="pos-restore-banner" role="alert">
+    <span class="pos-restore-label">Unsaved cart found.</span>
+    <div style="display:flex;gap:8px;flex-shrink:0">
+      <button class="pos-restore-btn">Restore cart</button>
+      <button class="pos-restore-dismiss">Dismiss</button>
+    </div>
+  </div>
+
+  {# Блок ошибок сети при checkout — появляется на 6 секунд #}
+  <div id="checkout-error" class="pos-alert" style="display:none;margin-bottom:1rem" role="alert"></div>
 
   <div class="pos-grid">
     <section class="pos-panel pos-panel-products">

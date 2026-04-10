@@ -48,6 +48,8 @@ urlpatterns = [
     path("cart/remove/<int:product_id>/", views.cart_remove, name="cart_remove"),
     # cart_clear: очистить корзину полностью.
     path("cart/clear/", views.cart_clear, name="cart_clear"),
+    
+    path("cart/restore/", views.cart_restore, name="cart_restore"),
 
     # ── Кухонный экран ──────────────────────────────────────────────────────
     path("kitchen/", views.kitchen_board, name="kitchen_board"),
@@ -93,4 +95,5 @@ urlpatterns = [
     # order_refund: возврат оплаченного заказа.
     # Отменяет заказ, возвращает товары на склад, создаёт фискальный чек возврата.
     path("orders/<uuid:public_id>/refund/", views.order_refund, name="order_refund"),
+    
 ]

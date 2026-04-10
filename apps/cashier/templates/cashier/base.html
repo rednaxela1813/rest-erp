@@ -9,12 +9,90 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
     <link href="{% static 'cashier/cashier.css' %}" rel="stylesheet">
+    <style>
+      /* --- Индикатор сети --- */
+      .pos-net-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        padding: 4px 10px;
+        border-radius: 999px;
+        border: 1px solid transparent;
+        transition: background 0.3s, color 0.3s, border-color 0.3s;
+      }
+      .pos-net-badge::before {
+        content: '';
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        transition: background 0.3s;
+      }
+      .pos-net-badge.is-online {
+        background: rgba(18, 194, 160, 0.12);
+        color: #0a7a65;
+        border-color: rgba(18, 194, 160, 0.35);
+      }
+      .pos-net-badge.is-online::before  { background: var(--mint); }
+      .pos-net-badge.is-offline {
+        background: rgba(255, 106, 61, 0.12);
+        color: #a14a2c;
+        border-color: rgba(255, 106, 61, 0.35);
+      }
+      .pos-net-badge.is-offline::before { background: var(--accent); }
+
+      /* --- Баннер оффлайн (под хедером) --- */
+      .pos-offline-banner {
+        display: none;
+        align-items: center;
+        gap: 10px;
+        background: rgba(255, 106, 61, 0.08);
+        border: 1px solid rgba(255, 106, 61, 0.25);
+        border-radius: 10px;
+        padding: 10px 16px;
+        margin-bottom: 1.5rem;
+        font-size: 13px;
+        color: #a14a2c;
+      }
+      .pos-offline-banner.is-visible { display: flex; }
+
+      /* --- Баннер восстановления корзины --- */
+      .pos-restore-banner {
+        display: none;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        background: rgba(255, 207, 112, 0.15);
+        border: 1px solid rgba(255, 207, 112, 0.5);
+        border-radius: 10px;
+        padding: 10px 16px;
+        margin-bottom: 1.5rem;
+        font-size: 13px;
+        color: #7a4d00;
+      }
+      .pos-restore-banner.is-visible { display: flex; }
+      .pos-restore-banner button {
+        background: none;
+        border: 1px solid rgba(122, 77, 0, 0.35);
+        border-radius: 6px;
+        padding: 4px 12px;
+        font-size: 12px;
+        font-weight: 600;
+        color: #7a4d00;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .pos-restore-banner button:hover { background: rgba(122, 77, 0, 0.08); }
+    </style>
   </head>
   <body class="pos-body" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
     {% block content %}{% endblock %}
     <script src="https://unpkg.com/htmx.org@1.9.12"></script>
     <script>
       (() => {
+        // ─── Калькулятор сдачи ───────────────────────────────────────────────
         const parseAmount = (raw) => {
           if (!raw) return 0;
           const cleaned = String(raw).replace(",", ".");
@@ -67,6 +145,164 @@
         document.addEventListener("DOMContentLoaded", () => {
           document.querySelectorAll("[data-change-root]").forEach(updateChange);
         });
+
+        // ─── Индикатор сети ──────────────────────────────────────────────────
+        //
+        // navigator.onLine — браузерное API. Возвращает true/false.
+        // События 'online' и 'offline' срабатывают когда меняется состояние.
+        // Мы обновляем бейдж в хедере и баннер под ним.
+
+        function updateNetworkUI(isOnline) {
+          const badge = document.getElementById("pos-net-badge");
+          const banner = document.getElementById("pos-offline-banner");
+          if (badge) {
+            badge.textContent = isOnline ? "Online" : "Offline";
+            badge.className = "pos-net-badge " + (isOnline ? "is-online" : "is-offline");
+          }
+          if (banner) {
+            banner.classList.toggle("is-visible", !isOnline);
+          }
+        }
+
+        window.addEventListener("online",  () => updateNetworkUI(true));
+        window.addEventListener("offline", () => updateNetworkUI(false));
+
+        document.addEventListener("DOMContentLoaded", () => {
+          updateNetworkUI(navigator.onLine);
+        });
+
+        // ─── Резервная копия корзины в localStorage ──────────────────────────
+        //
+        // Ключ хранения — включает org_id чтобы не перемешивать данные
+        // разных организаций на одном устройстве.
+        // Формат: { items: [{id, name, qty, price}, ...], savedAt: ISO-string }
+        //
+        // Логика:
+        //   1. После каждого обновления корзины (htmx:afterSwap на #cart-panel)
+        //      читаем DOM и сохраняем в localStorage.
+        //   2. При загрузке страницы: если корзина пустая, но localStorage
+        //      содержит данные не старше 8 часов — показываем баннер восстановления.
+        //   3. Кнопка "Восстановить" отправляет POST на /cashier/cart/restore/
+        //      с данными из localStorage.
+        //   4. Кнопка "Dismiss" скрывает баннер и очищает localStorage.
+
+        const CART_KEY = "pos_cart_backup_{{ org.public_id|default:'default' }}";
+        const CART_TTL_MS = 8 * 60 * 60 * 1000; // 8 часов
+
+        function readCartFromDOM() {
+          // Читаем корзину из отрендеренного DOM.
+          // Каждый .pos-cart-item содержит data-product-id, data-qty, data-name.
+          const items = [];
+          document.querySelectorAll(".pos-cart-item[data-product-id]").forEach(el => {
+            items.push({
+              id:    el.dataset.productId,
+              name:  el.dataset.name  || "",
+              qty:   parseInt(el.dataset.qty || "1", 10),
+              price: el.dataset.price || "",
+            });
+          });
+          return items;
+        }
+
+        function saveCartToStorage() {
+          const items = readCartFromDOM();
+          if (items.length === 0) {
+            localStorage.removeItem(CART_KEY);
+            return;
+          }
+          localStorage.setItem(CART_KEY, JSON.stringify({
+            items,
+            savedAt: new Date().toISOString(),
+          }));
+        }
+
+        function loadCartFromStorage() {
+          try {
+            const raw = localStorage.getItem(CART_KEY);
+            if (!raw) return null;
+            const data = JSON.parse(raw);
+            const age = Date.now() - new Date(data.savedAt).getTime();
+            if (age > CART_TTL_MS) {
+              localStorage.removeItem(CART_KEY);
+              return null;
+            }
+            return data;
+          } catch {
+            return null;
+          }
+        }
+
+        function showRestoreBanner(data) {
+          const banner = document.getElementById("pos-restore-banner");
+          if (!banner) return;
+          const count = data.items.length;
+          const names = data.items.map(i => i.name).join(", ");
+          const label = banner.querySelector(".pos-restore-label");
+          if (label) label.textContent = `Unsaved cart found: ${count} item(s) — ${names}`;
+          banner.classList.add("is-visible");
+
+          banner.querySelector(".pos-restore-btn")?.addEventListener("click", () => {
+            // Отправляем данные на сервер для восстановления корзины
+            const payload = JSON.stringify(data.items.map(i => ({ id: i.id, qty: i.qty })));
+            htmx.ajax("POST", "/cashier/cart/restore/", {
+              target: "#cart-panel",
+              swap: "innerHTML",
+              values: { items: payload },
+            });
+            banner.classList.remove("is-visible");
+            localStorage.removeItem(CART_KEY);
+          });
+
+          banner.querySelector(".pos-restore-dismiss")?.addEventListener("click", () => {
+            banner.classList.remove("is-visible");
+            localStorage.removeItem(CART_KEY);
+          });
+        }
+
+        // Сохраняем корзину после каждого обновления cart-panel
+        document.addEventListener("htmx:afterSwap", (event) => {
+          if (event.target.id === "cart-panel" || event.target.closest("#cart-panel")) {
+            saveCartToStorage();
+          }
+        });
+
+        // При загрузке: проверяем нужно ли показать баннер восстановления
+        document.addEventListener("DOMContentLoaded", () => {
+          const currentItems = readCartFromDOM();
+          // Показываем баннер только если текущая корзина пустая
+          if (currentItems.length === 0) {
+            const saved = loadCartFromStorage();
+            if (saved && saved.items.length > 0) {
+              showRestoreBanner(saved);
+            }
+          }
+        });
+
+        // ─── Обработка сетевой ошибки при checkout ───────────────────────────
+        //
+        // htmx:sendError срабатывает когда запрос не ушёл вообще (нет сети).
+        // htmx:responseError срабатывает на 5xx от сервера.
+        // В обоих случаях показываем понятное сообщение кассиру.
+
+        function showCheckoutError(message) {
+          const target = document.getElementById("checkout-error");
+          if (target) {
+            target.textContent = message;
+            target.style.display = "block";
+            setTimeout(() => { target.style.display = "none"; }, 6000);
+          }
+        }
+
+        document.addEventListener("htmx:sendError", (event) => {
+          showCheckoutError("Network error — please check your connection and try again.");
+        });
+
+        document.addEventListener("htmx:responseError", (event) => {
+          if (event.detail.xhr.status >= 500) {
+            showCheckoutError("Server error — please try again in a moment.");
+          }
+        });
+
       })();
     </script>
   </body>
