@@ -1,4 +1,24 @@
-<div class="pos-product-card">
+<button
+  class="pos-product-card"
+  type="button"
+  hx-post="{% url 'cashier:cart_add' product.id %}"
+  hx-target="#cart-panel"
+  hx-swap="innerHTML"
+>
+  <div class="pos-product-media">
+    {% if product.cashier_image_src %}
+      <img
+        class="pos-product-image"
+        src="{{ product.cashier_image_src }}"
+        alt="{{ product.name }}"
+        loading="lazy"
+      >
+    {% else %}
+      <div class="pos-product-image-fallback" aria-hidden="true">
+        <span>{{ product.name|slice:":1"|upper }}</span>
+      </div>
+    {% endif %}
+  </div>
   <div class="pos-product-name">{{ product.name }}</div>
   <div class="pos-product-meta">
     {% if product.requires_preparation %}
@@ -11,54 +31,7 @@
   {% if product.barcode %}
     <div class="pos-product-barcode">Barcode {{ product.barcode }}</div>
   {% endif %}
-  <div class="pos-product-actions">
-    <button
-      class="pos-btn pos-btn-outline"
-      hx-post="{% url 'cashier:cart_add' product.id %}"
-      hx-target="#cart-panel"
-      hx-swap="innerHTML"
-    >
-      Add
-    </button>
+  <div class="pos-product-cta">
+    <span>Add</span>
   </div>
-
-  {% if product.variants.all or product.addons.all %}
-    <details class="pos-product-options">
-      <summary>Customize</summary>
-      <form
-        class="pos-options-form"
-        hx-post="{% url 'cashier:cart_add_custom' product.id %}"
-        hx-target="#cart-panel"
-        hx-swap="innerHTML"
-      >
-        {% if product.variants.all %}
-          <div class="pos-option-group">
-            <div class="pos-option-label">Variant</div>
-            {% for variant in product.variants.all %}
-              <label class="pos-option-item">
-                <input type="radio" name="variant" value="{{ variant.public_id }}">
-                {{ variant.name }} · {{ variant.unit_price }} {{ currency }}
-              </label>
-            {% endfor %}
-          </div>
-        {% endif %}
-        {% if product.addons.all %}
-          <div class="pos-option-group">
-            <div class="pos-option-label">Add-ons</div>
-            {% for addon in product.addons.all %}
-              <label class="pos-option-item">
-                <input type="checkbox" name="addons" value="{{ addon.public_id }}">
-                {{ addon.name }} · {{ addon.price }} {{ currency }}
-              </label>
-            {% endfor %}
-          </div>
-        {% endif %}
-        <div class="pos-option-group">
-          <div class="pos-option-label">Note</div>
-          <input class="pos-option-note" name="note" type="text" placeholder="No onion, well done...">
-        </div>
-        <button class="pos-btn pos-btn-secondary" type="submit">Add with options</button>
-      </form>
-    </details>
-  {% endif %}
-</div>
+</button>

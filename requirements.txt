@@ -7,6 +7,7 @@ drf-spectacular==0.28.0
 structlog==24.4.0
 iniconfig==2.3.0
 packaging==25.0
+Pillow==11.2.1
 pluggy==1.6.0
 psycopg==3.3.2
 psycopg-binary==3.3.2

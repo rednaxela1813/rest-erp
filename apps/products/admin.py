@@ -55,6 +55,8 @@ class ProductAdmin(admin.ModelAdmin):
         "name",
         "org",
         "status",
+        "image",
+        "image_url",
         "barcode",
         "is_bundle",
         "requires_preparation",

@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 import pytest
+from django.core.files.uploadedfile import SimpleUploadedFile
 
 from apps.accounting.models import AccountingEntry
 from apps.cashier import views as cashier_views
@@ -405,3 +406,69 @@ def test_payment_status_marks_failed_when_inline_fiscal_processing_crashes(
     payment.refresh_from_db()
     assert payment.fiscal_status == OrderPayment.FiscalStatus.FAILED
     assert payment.failure_reason == "ekasa offline"
+
+
+@pytest.mark.django_db
+def test_cashier_product_list_renders_product_image(cashier_client):
+    client, user, org = cashier_client
+    _prepare_cashier_session(client=client, org=org, user=user)
+    product = _prepare_product(org=org)
+    product.image_url = "https://example.com/images/burger.jpg"
+    product.save(update_fields=["image_url"])
+
+    response = client.get("/cashier/products/")
+
+    assert response.status_code == 200
+    content = response.content.decode()
+    assert 'src="https://example.com/images/burger.jpg"' in content
+    assert 'alt="Burger"' in content
+
+
+@pytest.mark.django_db
+def test_cashier_product_list_prefers_uploaded_image_over_url(cashier_client, settings, tmp_path):
+    settings.MEDIA_ROOT = tmp_path
+
+    client, user, org = cashier_client
+    _prepare_cashier_session(client=client, org=org, user=user)
+    product = _prepare_product(org=org)
+    product.image_url = "https://example.com/images/url-burger.jpg"
+    product.image = SimpleUploadedFile(
+        "burger.png",
+        (
+            b"\x89PNG\r\n\x1a\n"
+            b"\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde"
+            b"\x00\x00\x00\x0cIDATx\x9cc\xf8\xcf\xc0\x00\x00\x03\x01\x01\x00\xc9\xfe\x92\xef"
+            b"\x00\x00\x00\x00IEND\xaeB`\x82"
+        ),
+        content_type="image/png",
+    )
+    product.save(update_fields=["image_url", "image"])
+
+    response = client.get("/cashier/products/")
+
+    assert response.status_code == 200
+    content = response.content.decode()
+    assert 'src="/media/products/' in content
+    assert "url-burger.jpg" not in content
+
+
+@pytest.mark.django_db
+def test_cashier_product_list_hides_simple_product_without_stock_lot(cashier_client):
+    client, user, org = cashier_client
+    _prepare_cashier_session(client=client, org=org, user=user)
+
+    unit = Unit.objects.create(org=org, name="pcs")
+    tax_rate = TaxRate.objects.create(org=org, name="VAT 20", rate=Decimal("20.00"))
+    Product.objects.create(
+        org=org,
+        name="Invisible Burger",
+        unit=unit,
+        tax_rate=tax_rate,
+        unit_price=Decimal("5.00"),
+    )
+
+    response = client.get("/cashier/products/")
+
+    assert response.status_code == 200
+    content = response.content.decode()
+    assert "Invisible Burger" not in content

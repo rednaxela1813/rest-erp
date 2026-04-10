@@ -130,7 +130,9 @@ def _get_products(org: Organization | None, query: str = ""):
             if has_enough_ingredients(product):
                 result.append(product)
         else:
-            result.append(product)
+            stock_qty = product.stock_qty_annotated or Decimal("0.000")
+            if stock_qty > 0:
+                result.append(product)
     return result
 
 

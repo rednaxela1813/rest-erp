@@ -9,6 +9,11 @@ from config.orgs.models import OrgScopedModel
 from decimal import Decimal
 
 
+def product_image_upload_to(instance, filename: str) -> str:
+    suffix = filename.rsplit(".", 1)[-1].lower() if "." in filename else "bin"
+    return f"products/{instance.org_id}/{uuid.uuid4()}.{suffix}"
+
+
 class Unit(OrgScopedModel):
     STATUS_ACTIVE = "active"
     STATUS_ARCHIVED = "archived"
@@ -82,6 +87,8 @@ class Product(OrgScopedModel):
     )
 
     name = models.CharField(max_length=255)
+    image = models.ImageField(upload_to=product_image_upload_to, blank=True, null=True)
+    image_url = models.URLField(blank=True, default="")
     barcode = models.CharField(max_length=64, blank=True, default="", db_index=True)
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_ACTIVE)
     product_type = models.CharField(max_length=16, choices=PRODUCT_TYPE_CHOICES, default=PRODUCT_TYPE_SIMPLE)
@@ -138,6 +145,12 @@ class Product(OrgScopedModel):
 
     def __str__(self) -> str:
         return self.name
+
+    @property
+    def cashier_image_src(self) -> str:
+        if self.image:
+            return self.image.url
+        return self.image_url
 
     def clean(self) -> None:
         super().clean()
@@ -262,5 +275,3 @@ class ProductAddon(models.Model):
 
     def __str__(self) -> str:
         return f"{self.product.name} - {self.name}"
-
-
