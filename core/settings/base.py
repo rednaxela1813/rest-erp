@@ -171,6 +171,14 @@ FISCAL_RECONCILE_ENABLED = config("FISCAL_RECONCILE_ENABLED", cast=bool, default
 LOG_RETENTION_ENABLED = config("LOG_RETENTION_ENABLED", cast=bool, default=True)
 LOG_RETENTION_DAYS = config("LOG_RETENTION_DAYS", cast=int, default=30)
 
+if FISCAL_MOCK_ENABLED and EKASA_ENABLED:
+    from django.core.exceptions import ImproperlyConfigured
+    raise ImproperlyConfigured(
+        "FISCAL_MOCK_ENABLED and EKASA_ENABLED cannot both be True. "
+        "Mock mode simulates fiscalization locally; eKasa mode calls the real NineDigit API. "
+        "Set only one of them to True."
+    )
+
 if FISCAL_MOCK_ENABLED:
     CELERY_BEAT_SCHEDULE["mock-device-commands-all-orgs"] = {
         "task": "apps.payments.tasks.process_device_commands_mock_for_all_orgs",

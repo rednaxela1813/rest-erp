@@ -29,12 +29,46 @@ def test_build_cash_register_request_sale():
 
     data = build_cash_register_request(command=command, cash_register_code="KASA-1")
     req = data["request"]["data"]
+
     assert req["cashRegisterCode"] == "KASA-1"
-    assert req["items"][0]["type"] == "positive"
-    assert str(req["items"][0]["unitPrice"]) == "5.00"
-    assert str(req["items"][0]["price"]) == "10.00"
-    assert req["payments"][0]["type"] == "cash"
-    assert req["payments"][0]["name"] == "Cash"
+    assert req["receiptType"] == "CashRegister"
+    assert data["request"]["externalId"] == "cmd-1"
+
+    item = req["items"][0]
+    # NineDigit expects PascalCase item types
+    assert item["type"] == "Positive"
+    assert str(item["unitPrice"]) == "5.00"
+    assert str(item["price"]) == "10.00"
+    # NineDigit expects quantity as object, not plain number
+    assert item["quantity"] == {"amount": pytest.approx(2.0), "unit": "pcs"}
+
+    payment = req["payments"][0]
+    # NineDigit payments have no "type" field
+    assert "type" not in payment
+    assert payment["name"] == "Hotovosť"
+
+
+def test_build_cash_register_request_card_payment_name():
+    command = _make_command(
+        command_type=DeviceCommand.Type.FISCALIZE_SALE,
+        payload={
+            "tender": "card",
+            "items": [
+                {
+                    "name": "Burger",
+                    "qty": "1.000",
+                    "unit_price": "5.00",
+                    "tax_rate": "20.00",
+                    "unit": "pcs",
+                }
+            ]
+        },
+    )
+
+    data = build_cash_register_request(command=command, cash_register_code="KASA-1")
+    payment = data["request"]["data"]["payments"][0]
+    assert "type" not in payment
+    assert payment["name"] == "Karta"
 
 
 def test_build_cash_register_request_refund_requires_reference():
@@ -77,7 +111,7 @@ def test_build_cash_register_request_refund_negative_amounts():
     data = build_cash_register_request(command=command, cash_register_code="KASA-1")
     req = data["request"]["data"]
     assert req["referenceReceiptId"] == "ekasa-123"
-    assert req["items"][0]["type"] == "returned"
+    assert req["items"][0]["type"] == "Returned"
     assert str(req["items"][0]["unitPrice"]) == "-5.00"
     assert str(req["items"][0]["price"]) == "-5.00"
 
@@ -102,5 +136,5 @@ def test_build_cash_register_request_storno_negative_amounts():
     data = build_cash_register_request(command=command, cash_register_code="KASA-1")
     req = data["request"]["data"]
     assert req["referenceReceiptId"] == "ekasa-456"
-    assert req["items"][0]["type"] == "correction"
+    assert req["items"][0]["type"] == "Correction"
     assert str(req["items"][0]["unitPrice"]) == "-5.00"

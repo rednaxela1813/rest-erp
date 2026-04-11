@@ -19,12 +19,24 @@ def _compute_vat_amount(*, gross: Decimal, vat_rate: Decimal) -> Decimal:
     return _quantize(gross - (gross / divisor), "0.01")
 
 
+# NineDigit item types are PascalCase (confirmed from Swagger sample)
+_ITEM_TYPE_MAP = {
+    "positive":   "Positive",
+    "returned":   "Returned",
+    "correction": "Correction",
+}
+
+
 def build_cash_register_request(*, command, cash_register_code: str) -> dict:
     """
-    Build the cash-register receipt payload for eKasa Web API.
+    Build the cash-register receipt payload for NineDigit eKasa Web API.
 
-    For refund/storno, we map to 'returned' and 'correction' item types
-    and use negative amounts as shown in vendor examples.
+    Item structure confirmed from NineDigit Swagger:
+    - quantity is an object {"amount": ..., "unit": ...}, not a plain number
+    - item type is PascalCase: "Positive", "Returned", "Correction"
+    - payments have only "name" and "amount" — no "type" field
+
+    For refund/storno: item type is "Returned"/"Correction", amounts are negative.
     """
     payload = command.payload or {}
     items_payload = payload.get("items") or []
@@ -52,83 +64,95 @@ def build_cash_register_request(*, command, cash_register_code: str) -> dict:
 
     items = []
     total = Decimal("0.00")
-    total_vat = Decimal("0.00")
     for item in items_payload:
         qty = Decimal(str(item.get("qty", "0")))
         unit_price = Decimal(str(item.get("unit_price", "0.00"))) * amount_sign
         vat_rate = Decimal(str(item.get("tax_rate", "0.00")))
         gross = _quantize(qty * unit_price, "0.01")
-        vat_amount = _compute_vat_amount(gross=gross, vat_rate=vat_rate)
 
         items.append(
             {
                 "name": item.get("name", ""),
-                "type": item_type,
-                "quantity": _quantize(qty, "0.0000"),
-                "unit": item.get("unit", "x"),
+                "type": _ITEM_TYPE_MAP[item_type],
+                # NineDigit expects quantity as object, not a plain number
+                "quantity": {
+                    "amount": _quantize(qty, "0.0000"),
+                    "unit": item.get("unit", "x"),
+                },
                 "unitPrice": _quantize(unit_price, "0.01"),
                 "price": gross,
                 "vatRate": _quantize(vat_rate, "0.00"),
-                "vatAmount": vat_amount,
             }
         )
         total += gross
-        total_vat += vat_amount
 
     tender = str(payload.get("tender") or "card").lower()
-    payment_type = "cash" if tender == "cash" else "card"
+    # NineDigit payments: only "name" and "amount", no "type" field
     payments = [
         {
-            "type": payment_type,
-            "name": "Cash" if payment_type == "cash" else "Card",
+            "name": "Hotovosť" if tender == "cash" else "Karta",
             "amount": _quantize(total, "0.01"),
         }
     ]
 
     data = {
         "cashRegisterCode": cash_register_code,
+        "receiptType": "CashRegister",
         "items": items,
         "payments": payments,
-        "externalId": str(command.public_id),
     }
     if reference_receipt_id:
         data["referenceReceiptId"] = reference_receipt_id
 
-    return {"request": {"data": data}}
+    return {"request": {"data": data, "externalId": str(command.public_id)}}
 
 
 def extract_receipt_reference(response: dict) -> str | None:
     """
-    Extract eKasa receipt reference (receipt_id/OKP) from API response.
+    Extract eKasa receipt ID from NineDigit API response.
 
-    The exact field names depend on the vendor payload. We keep this mapper
-    tolerant and expand it once we see the real response schema.
+    Real response schema (confirmed from NineDigit Swagger):
+    {
+      "response": {
+        "data": {
+          "id": "O-7DBCDA8A56EE426DBCDA8A56EE426D1A"
+        },
+        "processDate": "..."
+      },
+      "isSuccessful": true,
+    }
+
+    Returns response.data.id — used as receipt_id for future refund/storno.
     """
     if not isinstance(response, dict):
         return None
+    try:
+        receipt_id = response["response"]["data"]["id"]
+        return str(receipt_id) if receipt_id else None
+    except (KeyError, TypeError):
+        return None
 
-    # Common nested patterns we might see in demo/production payloads.
-    candidates = [
-        ("receipt_id",),
-        ("okp",),
-        ("data", "receipt_id"),
-        ("data", "okp"),
-        ("data", "receiptId"),
-        ("data", "OKP"),
-        ("response", "receipt_id"),
-        ("response", "okp"),
-        ("response", "receiptId"),
-        ("response", "OKP"),
-    ]
 
-    for path in candidates:
-        node = response
-        for key in path:
-            if not isinstance(node, dict) or key not in node:
-                node = None
-                break
-            node = node[key]
-        if node:
-            return str(node)
+def extract_okp(response: dict) -> str | None:
+    """
+    Extract OKP (Overovací Kód Pokladnice) from NineDigit API response.
 
-    return None
+    OKP is stored in request.data.okp in the response echo — it appears
+    on the printed receipt and is required for fiscal verification.
+
+    Real response schema:
+    {
+      "request": {
+        "data": {
+          "okp": "04eacca4-6ff07dea-c2c85513-28181bb6-f46edcb0",
+        }
+      }
+    }
+    """
+    if not isinstance(response, dict):
+        return None
+    try:
+        okp = response["request"]["data"]["okp"]
+        return str(okp) if okp else None
+    except (KeyError, TypeError):
+        return None
