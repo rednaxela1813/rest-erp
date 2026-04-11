@@ -74,6 +74,11 @@ def finalize_paid_order(*, order: Order, actor=None) -> Order:
                             component.id, Decimal("0")
                         ) + component_qty
             elif product.product_type == Product.PRODUCT_TYPE_PREPARED:
+                # The prepared product itself (e.g. burger) goes to the kitchen.
+                kitchen_qty_by_product_id[product.id] = kitchen_qty_by_product_id.get(
+                    product.id, Decimal("0")
+                ) + item_qty
+                # Its ingredients are deducted from stock.
                 recipe = getattr(product, "recipe", None)
                 if recipe:
                     for ingredient in recipe.ingredients.all():
@@ -81,14 +86,9 @@ def finalize_paid_order(*, order: Order, actor=None) -> Order:
                         if not ingredient_product:
                             continue
                         ingredient_qty = item_qty * ingredient.quantity
-                        if ingredient_product.requires_preparation:
-                            kitchen_qty_by_product_id[ingredient_product.id] = kitchen_qty_by_product_id.get(
-                                ingredient_product.id, Decimal("0")
-                            ) + ingredient_qty
-                        else:
-                            qty_by_product_id[ingredient_product.id] = qty_by_product_id.get(
-                                ingredient_product.id, Decimal("0")
-                            ) + ingredient_qty
+                        qty_by_product_id[ingredient_product.id] = qty_by_product_id.get(
+                            ingredient_product.id, Decimal("0")
+                        ) + ingredient_qty
             else:
                 if product.requires_preparation:
                     kitchen_qty_by_product_id[product.id] = kitchen_qty_by_product_id.get(

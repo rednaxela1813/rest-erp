@@ -4,6 +4,7 @@ from django.db import transaction
 from rest_framework.exceptions import ValidationError
 import structlog
 
+from apps.accounting.logic.record_refund import record_refund
 from apps.orders.logic.cancel_order import cancel_order
 from apps.orders.models import Order
 from apps.payments.logic.enqueue_device_commands import enqueue_refund_commands
@@ -49,6 +50,9 @@ def refund_paid_order(*, order: Order, actor=None) -> FiscalReceipt:
     with transaction.atomic():
         # Cancel the order and revert stock atomically.
         cancelled = cancel_order(order=order, actor=actor)
+
+        # Write accounting entry for the refund.
+        record_refund(order=cancelled, tender=payment.tender)
 
         # Create (or reuse) refund fiscal receipt for this payment.
         receipt, _created = FiscalReceipt.objects.get_or_create(

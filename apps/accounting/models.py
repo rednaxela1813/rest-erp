@@ -11,6 +11,8 @@ class AccountingEntry(OrgScopedModel):
     class EntryType(models.TextChoices):
         SALE          = "sale",          "Продажа"
         REFUND        = "refund",        "Возврат"
+        REFUND_CASH   = "refund_cash",   "Возврат наличными"
+        REFUND_CARD   = "refund_card",   "Возврат по карте"
         STOCK_RECEIPT = "stock_receipt", "Приход товара"
         STOCK_OUT     = "stock_out",     "Расход товара"
         PAYMENT_OUT   = "payment_out",   "Оплата поставщику"

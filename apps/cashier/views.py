@@ -1294,6 +1294,19 @@ def order_refund(request: HttpRequest, public_id) -> HttpResponse:
     )
     try:
         refund_paid_order(order=order, actor=request.user)
+
+        # For cash refunds: record cash leaving the drawer.
+        # Card refunds have no physical drawer movement — no terminal integration.
+        payment = order.payments.filter(status=OrderPayment.Status.CAPTURED).first()
+        if payment and payment.tender == OrderPayment.Tender.CASH:
+            CashDrawerMovement.objects.create(
+                session=session,
+                actor=request.user,
+                movement_type=CashDrawerMovement.Type.CASH_OUT,
+                amount=payment.amount,
+                reason=f"Refund: order {order.public_id}",
+            )
+
         _trigger_ekasa_processing_for_org(session.org_id)
         logger.info(
             "cashier_order_refund_succeeded",
@@ -1301,6 +1314,7 @@ def order_refund(request: HttpRequest, public_id) -> HttpResponse:
             session_id=str(session.public_id),
             order_id=str(order.public_id),
             user_id=str(request.user.id),
+            tender=payment.tender if payment else "",
         )
     except ValidationError as exc:
         logger.warning(

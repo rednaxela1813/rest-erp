@@ -81,16 +81,18 @@ def cancel_order(*, order: Order, actor=None) -> Order:
         products_map = {p.id: p for p in locked_products}
 
         from apps.inventory.services.deduct_stock import restore_stock
+        from apps.accounting.logic.record_stock_return import record_stock_return
 
         for pid, total_qty in qty_by_product_id.items():
             p = products_map[pid]
-            restore_stock(
+            movement = restore_stock(
                 org=locked_order.org,
                 product=p,
                 quantity=total_qty,
                 reason="order_cancelled",
                 comment=str(locked_order.public_id),
             )
+            record_stock_return(movement=movement)
 
         old_status = locked_order.status
         locked_order.status = Order.STATUS_CANCELLED
