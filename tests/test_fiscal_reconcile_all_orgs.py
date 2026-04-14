@@ -57,7 +57,7 @@ def test_reconcile_payment_fiscal_status_for_all_orgs_targets_only_stuck_payment
 
     monkeypatch.setattr(
         "apps.payments.tasks.reconcile_payment_fiscal_status",
-        type("DummyTask", (), {"run": staticmethod(fake_reconcile)}),
+        fake_reconcile,
     )
 
     result = reconcile_payment_fiscal_status_for_all_orgs.run(limit=10)

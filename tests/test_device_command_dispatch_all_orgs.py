@@ -17,6 +17,7 @@ def test_dispatch_device_commands_for_all_orgs_processes_each_org(
     org_one = org_factory(name="Org One")
     org_two = org_factory(name="Org Two")
 
+    # Создаём данные для двух организаций
     order_one = Order.objects.create(org=org_one)
     payment_one = OrderPayment.objects.create(
         org=org_one,
@@ -53,15 +54,19 @@ def test_dispatch_device_commands_for_all_orgs_processes_each_org(
         idempotency_key="org2:fiscal",
     )
 
-    calls = {"count": 0}
+    # Теперь проверяем не выполнение, а постановку в очередь
+    dispatched_org_ids = []
 
-    def _publish(commands):
-        calls["count"] += len(commands)
-        return len(commands)
+    def fake_delay(*, org_id, limit):
+        dispatched_org_ids.append(org_id)
 
-    monkeypatch.setattr("apps.payments.tasks.publish_device_commands", _publish)
+    monkeypatch.setattr(
+        "apps.payments.tasks.dispatch_device_commands.delay",
+        fake_delay,
+    )
 
     result = dispatch_device_commands_for_all_orgs.run(limit=10)
 
     assert result["orgs_processed"] == 2
-    assert calls["count"] == 2
+    assert org_one.id in dispatched_org_ids
+    assert org_two.id in dispatched_org_ids

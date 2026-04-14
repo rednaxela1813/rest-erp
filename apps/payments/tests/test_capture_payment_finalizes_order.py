@@ -114,6 +114,11 @@ def test_capture_payment_with_ekasa_keeps_order_unfinalized_until_fiscal_confirm
         "apps.payments.providers.registry.get_provider_for_payment",
         lambda p: type("P", (), {"capture": staticmethod(fake_capture)}),
     )
+    
+    monkeypatch.setattr(
+        "apps.payments.tasks.process_device_commands_ekasa.delay",
+            lambda *args, **kwargs: None,
+     )
 
     capture_payment(payment=payment, actor=user)
 

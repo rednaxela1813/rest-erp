@@ -541,7 +541,7 @@ def test_reconcile_payment_fiscal_for_all_orgs_task_logs_started_and_succeeded(o
     monkeypatch.setattr("apps.payments.tasks.logger", stub)
     monkeypatch.setattr(
         "apps.payments.tasks.reconcile_payment_fiscal_status",
-        type("DummyTask", (), {"run": staticmethod(lambda *, payment_id: {"updated": True})}),
+        lambda *, payment_id: {"updated": True},
     )
 
     result = reconcile_payment_fiscal_status_for_all_orgs.run(limit=10)

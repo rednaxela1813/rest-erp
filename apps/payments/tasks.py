@@ -8,6 +8,8 @@ from django.db import transaction
 from config.orgs.models import Organization
 from django.db.models import F
 
+
+
 from apps.accounting.logic.record_sale import record_sale
 from apps.orders.logic.finalize_paid_order import finalize_paid_order
 from apps.payments.logic.device_commands import (
@@ -231,7 +233,7 @@ def dispatch_device_commands_for_all_orgs(self, limit: int = 50) -> dict:
     logger.info("task_dispatch_device_commands_for_all_orgs_started", limit=limit)
     results = []
     for org_id in Organization.objects.values_list("id", flat=True):
-        results.append(dispatch_device_commands.run(org_id=org_id, limit=limit))
+        results.append(dispatch_device_commands.delay(org_id=org_id, limit=limit))
 
     result = {
         "orgs_processed": len(results),
@@ -252,7 +254,7 @@ def process_device_commands_mock_for_all_orgs(self, limit: int = 50) -> dict:
     logger.info("task_process_device_commands_mock_for_all_orgs_started", limit=limit)
     results = []
     for org_id in Organization.objects.values_list("id", flat=True):
-        results.append(process_device_commands_mock.run(org_id=org_id, limit=limit))
+        results.append(process_device_commands_mock.delay(org_id=org_id, limit=limit))
 
     result = {
         "orgs_processed": len(results),
@@ -396,7 +398,7 @@ def process_device_commands_ekasa_for_all_orgs(self, limit: int = 50) -> dict:
     logger.info("task_process_device_commands_ekasa_for_all_orgs_started", limit=limit)
     results = []
     for org_id in Organization.objects.values_list("id", flat=True):
-        results.append(process_device_commands_ekasa.run(org_id=org_id, limit=limit))
+        results.append(process_device_commands_ekasa.delay(org_id=org_id, limit=limit))
 
     result = {
         "orgs_processed": len(results),
@@ -544,7 +546,7 @@ def reconcile_payment_fiscal_status_for_all_orgs(self, limit: int = 200) -> dict
     processed = 0
     updated = 0
     for payment in candidate_payments:
-        result = reconcile_payment_fiscal_status.run(payment_id=payment.id)
+        result = reconcile_payment_fiscal_status(payment_id=payment.id)
         processed += 1
         if result.get("updated"):
             updated += 1
