@@ -3,11 +3,13 @@
 from decimal import Decimal
 import pytest
 
+
 from apps.cashier import views as cashier_views
 from apps.orders.models import Order, OrderItem
 from apps.payments.models import CashDrawerMovement, CashierSession, OrderPayment, Terminal
 from apps.products.models import Product, TaxRate, Unit
 from config.orgs.models import OrganizationMember
+from apps.accounting.models import AccountingEntry
 
 
 def _prepare_cashier_session(*, client, org, user) -> CashierSession:
@@ -155,3 +157,37 @@ def test_card_refund_does_not_create_cash_out_movement(client, user_factory, org
         movement_type=CashDrawerMovement.Type.CASH_OUT,
     ).count()
     assert cash_out_count == 0, "Card refund must NOT create CASH_OUT movement"
+
+
+"""Тест на правильность записи в базу при оплате наличными"""
+@pytest.mark.django_db
+def test_cash_payment_records_sale(client, user_factory, org_factory):
+    from apps.accounting.models import AccountingEntry
+
+    user = user_factory(email="cashier4@example.com")
+    org = org_factory(name="Test Org 4")
+    OrganizationMember.objects.create(org=org, user=user, role="member")
+    client.force_login(user)
+    session = _prepare_cashier_session(client=client, org=org, user=user)
+    product = _prepare_product(org=org)
+
+    # Кладём товар в корзину
+    session_data = client.session
+    session_data[cashier_views.SESSION_CART] = {str(product.id): 1}
+    session_data.save()
+
+    # Делаем checkout наличными
+    resp = client.post("/cashier/checkout/", {"tender": "cash"})
+    assert resp.status_code == 302
+
+    # Проверяем бухгалтерскую запись
+    entry = AccountingEntry.objects.filter(
+        org=org,
+        entry_type=AccountingEntry.EntryType.SALE_CASH,
+    ).first()
+    assert entry is not None, "SALE_CASH entry should be created after cash payment"
+    assert entry.amount == product.unit_price
+    
+    
+    
+    

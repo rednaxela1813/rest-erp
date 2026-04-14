@@ -119,9 +119,9 @@ def finalize_paid_order(*, order: Order, actor=None) -> Order:
                     reason="order_paid",
                     comment=str(order.public_id),
                 )
-                for m in movements:                
+                # for m in movements:                
 
-                    record_stock_out(movement=m)  # связать с функцией, которая создаёт запись в бухгалтерии
+                #     record_stock_out(movement=m)  # связать с функцией, которая создаёт запись в бухгалтерии
                     
             except InsufficientStock as e:
                 logger.warning(

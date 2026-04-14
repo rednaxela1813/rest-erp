@@ -8,6 +8,7 @@ Requires NineDigit running locally and EKASA_CASH_REGISTER_CODE set in .env.
 """
 import json
 import os
+import re
 import pytest
 from decimal import Decimal
 from unittest.mock import MagicMock
@@ -19,6 +20,12 @@ from apps.payments.ekasa.mapper import (
     extract_okp,
 )
 from apps.payments.models import DeviceCommand
+
+
+def _has_real_cash_register_code(value: str) -> bool:
+    if not value:
+        return False
+    return re.fullmatch(r"\d{17}", value) is not None
 
 
 def _make_mock_command(command_type=DeviceCommand.Type.FISCALIZE_SALE):
@@ -58,8 +65,8 @@ def test_register_cash_register_real_call(settings):
     - extract_okp returns a non-empty string
     """
     cash_register_code = settings.EKASA_CASH_REGISTER_CODE
-    if not cash_register_code:
-        pytest.skip("EKASA_CASH_REGISTER_CODE not set in settings")
+    if not _has_real_cash_register_code(cash_register_code):
+        pytest.skip("EKASA_CASH_REGISTER_CODE must be set to a real 17-digit code for integration tests")
 
     command = _make_mock_command()
     payload = build_cash_register_request(
@@ -67,7 +74,10 @@ def test_register_cash_register_real_call(settings):
         cash_register_code=cash_register_code,
     )
 
-    client = EkasaClient(base_url=os.environ.get("EKASA_BASE_URL", "http://host.docker.internal:3010"), api_key="", timeout_s=10)
+    base_url = os.environ.get("EKASA_INTEGRATION_BASE_URL", "http://host.docker.internal:3010")
+    settings.EKASA_BASE_URL = base_url
+
+    client = EkasaClient(base_url=settings.EKASA_BASE_URL, api_key="", timeout_s=10)
     response = client.register_cash_register(payload=payload)
 
     # Log full response for debugging

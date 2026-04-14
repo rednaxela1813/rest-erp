@@ -28,6 +28,7 @@ from apps.payments.logic.shift import close_shift, shift_report
 from apps.payments.models import CashDrawerMovement, CashierSession, DeviceCommand, OrderPayment, Terminal
 from apps.products.models import Product
 from config.orgs.models import Organization
+from apps.accounting.logic.record_sale import record_sale
 
 from apps.recipes.services.check_ingredients import has_enough_ingredients
 
@@ -321,12 +322,13 @@ def _confirm_cash_payment(*, payment: OrderPayment, actor, session: CashierSessi
     if not settings.EKASA_ENABLED:
         try:
             finalize_paid_order(order=payment.order, actor=actor)
+           
         except ValidationError as exc:
             payment.status = OrderPayment.Status.FAILED
             payment.failure_reason = str(exc)
             payment.save(update_fields=["status", "failure_reason", "updated_at"])
             return payment
-
+        record_sale(order=payment.order, tender=payment.tender)
     CashDrawerMovement.objects.create(
         session=session,
         actor=actor,
