@@ -52,3 +52,4 @@ celerybeat-schedule-shm
 celerybeat-schedule-wal
 
 
+celerybeat-schedule*
