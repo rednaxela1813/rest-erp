@@ -1,7 +1,7 @@
 # apps/orders/api_views.py
 
 from django.shortcuts import get_object_or_404
-import inspect
+
 import structlog
 
 from rest_framework import generics, status
@@ -44,17 +44,7 @@ class OrderListCreateApi(generics.ListCreateAPIView):
         serializer.save(org=org)
 
 
-class OrderItemListApi(generics.ListAPIView):
-    permission_classes = [IsAuthenticated, IsOrgMemberReadOnlyOrOrgAdmin]
-    serializer_class = OrderItemSerializer
 
-    def get_queryset(self):
-        org = get_request_org(self.request)
-        order_public_id = self.kwargs["order_public_id"]
-
-        # гарантируем org-scope через Order
-        order = Order.objects.get(org=org, public_id=order_public_id)
-        return OrderItem.objects.filter(order=order).order_by("id")
 
 
 class OrderItemListCreateApi(generics.ListCreateAPIView):
@@ -100,16 +90,7 @@ class OrderDetailApi(generics.RetrieveUpdateAPIView):
         org = get_request_org(self.request)
         return Order.objects.filter(org=org)
     
-    def _call_usecase(self, fn, *, order):
-        """
-        Совместимость:
-        - старые тесты monkeypatch могут подменять use-case без параметра actor
-        - новые use-case принимают actor (для истории статусов)
-        """
-        sig = inspect.signature(fn)
-        if "actor" in sig.parameters:
-            return fn(order=order, actor=self.request.user)
-        return fn(order=order)
+    
 
     def perform_update(self, serializer):
         order = self.get_object()
@@ -134,11 +115,11 @@ class OrderDetailApi(generics.RetrieveUpdateAPIView):
 
         if new_status == Order.STATUS_CANCELLED:
             if old_status == Order.STATUS_DRAFT:
-                updated = self._call_usecase(cancel_draft_order, order=order)
+                updated = cancel_draft_order(order=order, actor=self.request.user)
                 serializer.instance = updated
                 return
 
-            updated = self._call_usecase(cancel_order, order=order)
+            updated = cancel_order(order=order, actor=self.request.user)
             serializer.instance = updated
             return
 
