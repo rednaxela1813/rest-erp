@@ -5,9 +5,10 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.urls import path, include
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
-from core.views import HealthView
+from core.views import HealthView, home_view
 
 urlpatterns = [
+    path('', home_view, name='home'),
     path('admin/', admin.site.urls),
     path('health', HealthView.as_view(), name='health'),
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),

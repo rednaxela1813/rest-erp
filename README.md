@@ -32,10 +32,10 @@ Not everything above is exposed as public REST endpoints yet. Some parts current
 
 ## Repository Layout
 
-This README describes the backend located in `project/backend`.
+The repository structure is as follows:
 
 ```text
-project/backend/
+rest-erp/
 ├── apps/
 │   ├── accounting/
 │   ├── cashier/
@@ -64,7 +64,8 @@ project/backend/
 ├── manage.py
 ├── pytest.ini
 ├── requirements.txt
-└── .env.example
+├── .env.example
+└── README.md
 ```
 
 ## Documentation
@@ -86,7 +87,6 @@ Cashier payment flow:
 ![Cashier payment flow](docs/screenshots/Screenshot%202026-04-10%20at%2013.08.28.png)
 
 Kitchen board:
-
 
 ![Kitchen board](docs/screenshots/Screenshot%202026-04-11%20at%2019.45.00.png)
 
@@ -124,70 +124,154 @@ Rules enforced by settings:
 - `manage.py` defaults to `core.settings.dev`
 - pytest also uses `core.settings.dev`
 
-## Run With Docker
+## Quick Start Guide
 
-Work from `project/backend`:
+### Step 1: Clone and Setup
 
 ```bash
+# Clone the repository
+git clone https://github.com/rednaxela1813/rest-erp.git
+cd rest-erp
+
+# Copy environment template
 cp .env.example .env
-docker compose up --build
+```
+
+### Step 2: Configure Environment
+
+Use Django's built-in utility to generate a secure SECRET_KEY (run inside Docker container):
+
+```bash
+# After containers are running, generate a new secret key
+docker compose exec web python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
+```
+
+Then update your `.env` file with the generated key:
+
+```env
+DJANGO_SECRET_KEY=your-generated-secret-key-here
+```
+
+### Step 3: Start Application
+
+```bash
+# If you have conflicting containers, clean them first:
+docker compose down
+
+# Build and start all services
+docker compose up -d --build
 ```
 
 This compose file starts:
 
-- `db` on PostgreSQL 17
-- `redis` on Redis 7
-- `web` with migrations + Django dev server
-- `celery_worker`
-- `celery_beat`
+- `db` - PostgreSQL 17 database
+- `redis` - Redis 7 for caching and message broker
+- `web` - Django application with auto-migrations
+- `celery_worker` - Background task processor
+- `celery_beat` - Periodic task scheduler
 
-Default local URLs:
+### Step 4: Create Superuser
 
-- app: `http://localhost:8000`
-- Swagger UI: `http://localhost:8000/api/docs/`
-- OpenAPI schema: `http://localhost:8000/api/schema/`
-- health: `http://localhost:8000/health`
-- admin: `http://localhost:8000/admin/`
+```bash
+# Create Django superuser account
+docker compose exec web python manage.py createsuperuser
+```
+
+Follow the prompts to set username, email, and password.
+
+### Step 5: Initialize Data
+
+```bash
+# Seed initial dictionaries (currencies, countries, etc.)
+docker compose exec web python manage.py seed_dictionaries
+```
+
+### Step 6: Setup Organization (Required)
+
+The application requires organization setup through Django admin:
+
+1. **Access Django Admin**: Navigate to `http://localhost:8000/admin/`
+2. **Login**: Use your superuser credentials
+3. **Create Organization**:
+   - Go to "Orgs" → "Organizations"
+   - Click "Add Organization"
+   - Fill in organization details (name, description, etc.)
+   - Save the organization
+4. **Add Organization Member**:
+   - Go to "Orgs" → "Organization members"
+   - Click "Add Organization member"
+   - Select your superuser in the "User" field
+   - Select the created organization
+   - Set role to **"owner"** (important for full access)
+   - Save the member
+
+### Step 7: Verify Installation
+
+Check that everything is working:
+
+- **Health Check**: `http://localhost:8000/health`
+- **API Documentation**: `http://localhost:8000/api/docs/`
+- **Admin Panel**: `http://localhost:8000/admin/`
+- **Cashier Interface**: `http://localhost:8000/cashier/`
+- **Operations Dashboard**: `http://localhost:8000/dashboard/`
 
 ## Run Locally Without Docker
 
-You need a running PostgreSQL and Redis and a filled `.env`.
+For development without Docker:
 
 ```bash
-cd project/backend
+# Setup Python environment
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+
+# Configure environment
 cp .env.example .env
+# Update .env with local database settings
+
+# Run Django
 python manage.py migrate
 python manage.py seed_dictionaries
+python manage.py createsuperuser
 python manage.py runserver
 ```
 
-Run background workers separately:
+Run background workers in separate terminals:
 
 ```bash
+# Terminal 1: Celery worker
 celery -A core worker -l info -Q device_commands,default
+
+# Terminal 2: Celery beat scheduler
 celery -A core beat -l info
-```
-
-Optional:
-
-```bash
-python manage.py createsuperuser
 ```
 
 ## Tests
 
-From `project/backend`:
+Run tests with Docker (recommended):
 
 ```bash
-pytest
+# Run all tests
+docker compose exec web pytest
+
+# Run specific test file
+docker compose exec web pytest tests/test_health.py
+
+# Run specific test module
+docker compose exec web pytest tests/test_kitchen_tickets.py
+
+# Run tests with specific markers
+docker compose exec web pytest -m integration
+
+# Run with verbose output
+docker compose exec web pytest -v
 ```
 
-Useful examples:
+Or run tests locally (requires local setup):
 
 ```bash
+# From project root
+pytest
 pytest tests/test_health.py
 pytest tests/test_kitchen_tickets.py
 pytest -m integration
@@ -291,3 +375,56 @@ pytest -m integration
 - `seed_dictionaries` exists and should be run for a fresh local database.
 - Media files are served by Django only in debug mode.
 - There are generated local files like `celerybeat-schedule*`; they are runtime artifacts, not project documentation targets.
+
+## Troubleshooting
+
+### Container Name Conflicts
+
+If you get "container name already in use" errors:
+
+```bash
+# Stop and remove all containers
+docker compose down
+
+# Or force remove specific containers
+docker rm -f auth_redis auth_db auth_web auth_celery_worker auth_celery_beat
+
+# Then restart
+docker compose up -d --build
+```
+
+### Missing SECRET_KEY
+
+If you get "SECRET_KEY" errors, make sure to:
+
+1. Copy `.env.example` to `.env`
+2. Generate a secure secret key after containers start:
+   ```bash
+   docker compose exec web python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
+   ```
+3. Update `DJANGO_SECRET_KEY` in your `.env` file
+4. Restart containers: `docker compose restart`
+
+### Organization Access Issues
+
+If you can't access cashier or dashboard interfaces:
+
+1. Ensure you've created an organization in Django admin
+2. Add your user as an organization member with "owner" role
+3. The application is multi-tenant and requires proper organization setup
+
+### Database Connection Issues
+
+If you get database connection errors:
+
+```bash
+# Check if database container is running
+docker compose ps
+
+# View database logs
+docker compose logs db
+
+# Reset database (WARNING: destroys data)
+docker compose down -v
+docker compose up -d --build
+```
