@@ -98,7 +98,7 @@ def test_cash_refund_reduces_drawer_total(client, user_factory, org_factory):
     """
     После возврата наличными остаток в ящике уменьшается на сумму возврата.
     """
-    from apps.cashier.views import _cash_drawer_total
+    from apps.cashier.logic.session import cash_drawer_total as _cash_drawer_total
 
     user = user_factory(email="cashier2@example.com")
     org = org_factory(name="Test Org 2")

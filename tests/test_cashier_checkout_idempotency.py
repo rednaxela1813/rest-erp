@@ -69,7 +69,7 @@ def test_checkout_generates_idempotency_key_and_persists(cashier_client):
 
     idempotency_map = client.session.get(cashier_views.SESSION_CHECKOUT_IDEMPOTENCY)
     assert isinstance(idempotency_map, dict)
-    fingerprint = cashier_views._cart_fingerprint(
+    fingerprint = cashier_views.cart_fingerprint(
         cart={str(product.id): 1}, tender=OrderPayment.Tender.CARD
     )
     assert idempotency_map.get(fingerprint) == payment.idempotency_key
