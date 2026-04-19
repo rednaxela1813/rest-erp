@@ -1,3 +1,4 @@
+import time
 from decimal import Decimal
 
 import pytest
@@ -420,12 +421,15 @@ def test_cashier_device_cash_confirm_logs_invalid_token(client, user_factory, or
 
     response = client.post(
         f"/cashier/device/payments/{payment.public_id}/cash/",
-        HTTP_X_DEVICE_TOKEN="wrong-token",
+        data="",
+        content_type="application/json",
+        HTTP_X_DEVICE_TS=str(int(time.time())),
+        HTTP_X_DEVICE_SIG="wrong-token",
     )
 
-    assert response.status_code == 403
+    assert response.status_code == 401
     assert stub.events[0][0] == "warning"
-    assert stub.events[0][1] == "cashier_device_cash_confirm_invalid_token"
+    assert stub.events[0][1] == "device_auth_failed"
 
 
 def test_dispatch_device_commands_task_logs_started_and_succeeded(org_factory, monkeypatch):
@@ -549,4 +553,3 @@ def test_reconcile_payment_fiscal_for_all_orgs_task_logs_started_and_succeeded(o
     assert result["processed"] == 1
     assert stub.events[0][1] == "task_reconcile_payment_fiscal_for_all_orgs_started"
     assert stub.events[-1][1] == "task_reconcile_payment_fiscal_for_all_orgs_succeeded"
-

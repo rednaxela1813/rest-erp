@@ -34,6 +34,8 @@ services:
     container_name: auth_web
     env_file:
       - .env
+    environment:
+      DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE:-core.settings.dev}
     depends_on:
       db:
         condition: service_healthy
@@ -59,6 +61,8 @@ services:
     container_name: auth_celery_worker
     env_file:
       - .env
+    environment:
+      DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE:-core.settings.dev}
     depends_on:
       db:
         condition: service_healthy
@@ -78,6 +82,8 @@ services:
     container_name: auth_celery_beat
     env_file:
       - .env
+    environment:
+      DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE:-core.settings.dev}
     depends_on:
       db:
         condition: service_healthy

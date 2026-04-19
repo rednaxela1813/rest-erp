@@ -1,3 +1,6 @@
+import hashlib
+import hmac
+import time
 from decimal import Decimal
 
 import pytest
@@ -8,6 +11,19 @@ from apps.orders.models import Order, OrderItem
 from apps.payments.models import CashDrawerMovement, CashierSession, DeviceCommand, OrderPayment, Terminal
 from apps.products.models import Product, TaxRate, Unit
 from config.orgs.models import OrganizationMember
+
+
+def _device_auth_headers(*, token: str, body: bytes = b"", timestamp: int | None = None) -> dict[str, str]:
+    ts = int(time.time()) if timestamp is None else timestamp
+    signature = hmac.new(
+        token.encode("utf-8"),
+        f"{ts}.{body.decode('utf-8')}".encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    return {
+        "HTTP_X_DEVICE_TS": str(ts),
+        "HTTP_X_DEVICE_SIG": signature,
+    }
 
 
 def _prepare_cashier_session(*, client, org, user) -> CashierSession:
@@ -314,7 +330,7 @@ def test_session_open_rejects_terminal_with_other_cashier_session(client, user_f
 
 
 @pytest.mark.django_db
-def test_device_cash_confirm_rejects_invalid_device_token(client, user_factory, org_factory, settings):
+def test_device_cash_confirm_rejects_forged_signature(client, user_factory, org_factory, settings):
     user = user_factory(email="cashier@example.com")
     org = org_factory(name="Cashier Org")
     OrganizationMember.objects.create(org=org, user=user, role="member")
@@ -346,11 +362,14 @@ def test_device_cash_confirm_rejects_invalid_device_token(client, user_factory, 
     settings.CASHIER_DEVICE_TOKEN = "secret-token"
     resp = client.post(
         f"/cashier/device/payments/{payment.public_id}/cash/",
-        HTTP_X_DEVICE_TOKEN="wrong-token",
+        data="",
+        content_type="application/json",
+        HTTP_X_DEVICE_TS=str(int(time.time())),
+        HTTP_X_DEVICE_SIG="bad",
     )
 
-    assert resp.status_code == 403
-    assert b"invalid device token" in resp.content
+    assert resp.status_code == 401
+    assert b"invalid device signature" in resp.content
 
 
 @pytest.mark.django_db
@@ -386,8 +405,52 @@ def test_device_card_confirm_requires_open_session(client, user_factory, org_fac
     settings.CASHIER_DEVICE_TOKEN = "secret-token"
     resp = client.post(
         f"/cashier/device/payments/{payment.public_id}/card/",
-        HTTP_X_DEVICE_TOKEN="secret-token",
+        data="",
+        content_type="application/json",
+        **_device_auth_headers(token="secret-token"),
     )
 
     assert resp.status_code == 403
     assert b"no open session" in resp.content
+
+
+@pytest.mark.django_db
+def test_device_cash_confirm_accepts_valid_signature(client, user_factory, org_factory, settings):
+    user = user_factory(email="cashier@example.com")
+    org = org_factory(name="Cashier Org")
+    OrganizationMember.objects.create(org=org, user=user, role="member")
+    session = _prepare_cashier_session(client=client, org=org, user=user)
+    product = _prepare_product(org=org)
+    order = Order.objects.create(org=org, status=Order.STATUS_DRAFT)
+    OrderItem.objects.create(
+        order=order,
+        product=product,
+        product_name=product.name,
+        qty=Decimal("1.000"),
+        unit=product.unit,
+        unit_price=product.unit_price,
+        tax_rate=product.tax_rate,
+    )
+    order.recompute_totals()
+    order.save(update_fields=["subtotal", "tax_total", "total", "updated_at"])
+    payment = OrderPayment.objects.create(
+        org=org,
+        order=order,
+        terminal=session.terminal,
+        tender=OrderPayment.Tender.CASH,
+        status=OrderPayment.Status.PENDING,
+        amount=order.total,
+        currency="EUR",
+        provider="manual",
+    )
+
+    settings.CASHIER_DEVICE_TOKEN = "secret-token"
+    resp = client.post(
+        f"/cashier/device/payments/{payment.public_id}/cash/",
+        data="",
+        content_type="application/json",
+        **_device_auth_headers(token="secret-token"),
+    )
+
+    assert resp.status_code == 200
+    assert resp.content == b"ok"

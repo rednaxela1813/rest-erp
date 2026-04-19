@@ -124,9 +124,11 @@ Rules enforced by settings:
 - `manage.py` defaults to `core.settings.dev`
 - pytest also uses `core.settings.dev`
 
-## Quick Start Guide
+## Development
 
-### Step 1: Clone and Setup
+### Docker Development
+
+#### Step 1: Clone and Setup
 
 ```bash
 # Clone the repository
@@ -137,7 +139,7 @@ cd rest-erp
 cp .env.example .env
 ```
 
-### Step 2: Configure Environment
+#### Step 2: Configure Environment
 
 Use Django's built-in utility to generate a secure SECRET_KEY (run inside Docker container):
 
@@ -152,7 +154,7 @@ Then update your `.env` file with the generated key:
 DJANGO_SECRET_KEY=your-generated-secret-key-here
 ```
 
-### Step 3: Start Application
+#### Step 3: Start Application
 
 ```bash
 # If you have conflicting containers, clean them first:
@@ -170,23 +172,85 @@ This compose file starts:
 - `celery_worker` - Background task processor
 - `celery_beat` - Periodic task scheduler
 
-### Step 4: Create Superuser
+## Production
+
+### Docker Production
+
+For a production-style container run, use the dedicated compose file and env template:
 
 ```bash
-# Create Django superuser account
+cp .env.prod.example .env.prod
+docker compose -f docker-compose.prod.yaml --env-file .env.prod up -d --build
+```
+
+Production-related files:
+
+- `docker-compose.prod.yaml` - isolated production compose project
+- `Dockerfile.prod` - production image with `gunicorn`
+- `requirements-prod.txt` - production-only Python dependencies
+- `.env.prod.example` - production environment template
+- `scripts/web-entrypoint.sh` - startup script that runs migrations and `collectstatic`
+
+This stack differs from the dev compose in a few important ways:
+
+- uses `core.settings.prod`
+- starts Django with `gunicorn` instead of `runserver`
+- runs without bind mounts
+- executes `migrate` and `collectstatic` on web container startup
+- serves static files through WhiteNoise
+- uses its own Compose project name: `rest-erp-prod`
+- uses a separate application image tag: `rest-erp-prod-app:latest`
+
+Because the production compose file is isolated under its own project name, it does not have to
+share containers, volumes, or networks with the development stack.
+
+Before first launch, update at least these values in `.env.prod`:
+
+- `DJANGO_SECRET_KEY`
+- `DJANGO_ALLOWED_HOSTS`
+- `POSTGRES_PASSWORD`
+- `CASHIER_DEVICE_TOKEN`
+
+If you run Django directly on port `8000` without an external TLS terminator, keep
+`DJANGO_SECURE_SSL_REDIRECT=False`. If you place the app behind Nginx/Caddy/Traefik with HTTPS,
+set it to `True`.
+
+Useful commands:
+
+```bash
+docker compose -f docker-compose.prod.yaml --env-file .env.prod logs -f web
+docker compose -f docker-compose.prod.yaml --env-file .env.prod exec web python manage.py createsuperuser
+docker compose -f docker-compose.prod.yaml --env-file .env.prod exec web python manage.py seed_dictionaries
+docker compose -f docker-compose.prod.yaml --env-file .env.prod down
+```
+
+## Common Post-Setup
+
+These steps apply after either the development Docker stack or the production Docker stack is up.
+
+### Step 1: Create Superuser
+
+```bash
+# Development
 docker compose exec web python manage.py createsuperuser
+
+# Production
+docker compose -f docker-compose.prod.yaml --env-file .env.prod exec web python manage.py createsuperuser
 ```
 
 Follow the prompts to set username, email, and password.
 
-### Step 5: Initialize Data
+### Step 2: Initialize Data
 
 ```bash
-# Seed initial dictionaries (currencies, countries, etc.)
+# Development
 docker compose exec web python manage.py seed_dictionaries
+
+# Production
+docker compose -f docker-compose.prod.yaml --env-file .env.prod exec web python manage.py seed_dictionaries
 ```
 
-### Step 6: Setup Organization (Required)
+### Step 3: Setup Organization (Required)
 
 The application requires organization setup through Django admin:
 
@@ -205,7 +269,7 @@ The application requires organization setup through Django admin:
    - Set role to **"owner"** (important for full access)
    - Save the member
 
-### Step 7: Verify Installation
+### Step 4: Verify Installation
 
 Check that everything is working:
 
@@ -215,7 +279,7 @@ Check that everything is working:
 - **Cashier Interface**: `http://localhost:8000/cashier/`
 - **Operations Dashboard**: `http://localhost:8000/dashboard/`
 
-## Run Locally Without Docker
+### Local Development Without Docker
 
 For development without Docker:
 

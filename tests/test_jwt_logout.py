@@ -15,6 +15,7 @@ def test_logout_blacklists_refresh_token(client):
         data={"email": "a@example.com", "password": "pass12345"},
         content_type="application/json",
     )
+    access = login_resp.json()["access"]
     refresh = login_resp.json()["refresh"]
 
     # logout -> должен принять refresh и занести его в blacklist
@@ -22,6 +23,7 @@ def test_logout_blacklists_refresh_token(client):
         reverse("jwt-logout"),
         data={"refresh": refresh},
         content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {access}",
     )
     assert logout_resp.status_code == 205  # Reset Content (часто используют) или 200 — см. реализацию
 

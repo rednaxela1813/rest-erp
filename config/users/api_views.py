@@ -1,8 +1,24 @@
-from rest_framework.permissions import IsAuthenticated, AllowAny
-from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework.response import Response
-from rest_framework.views import APIView
 from rest_framework import status
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
+from rest_framework.views import APIView
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+
+
+class LoginView(TokenObtainPairView):
+    # intentionally public: users need to obtain their first JWT without prior authentication
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "login"
+
+
+class RefreshView(TokenRefreshView):
+    # intentionally public: refresh uses the submitted refresh token instead of an access token
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "login"
 
 
 class MeView(APIView):
@@ -17,8 +33,9 @@ class MeView(APIView):
             }
         )
 
+
 class LogoutView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         refresh = request.data.get("refresh")

@@ -40,3 +40,12 @@ def test_both_disabled_is_ok():
         from django.conf import settings
         assert settings.FISCAL_MOCK_ENABLED is False
         assert settings.EKASA_ENABLED is False
+
+
+def test_prod_requires_cashier_device_token():
+    with pytest.raises(ImproperlyConfigured, match="CASHIER_DEVICE_TOKEN must be set in production"):
+        with override_settings(CASHIER_DEVICE_TOKEN=None):
+            from django.conf import settings
+
+            if not settings.CASHIER_DEVICE_TOKEN:
+                raise ImproperlyConfigured("CASHIER_DEVICE_TOKEN must be set in production")

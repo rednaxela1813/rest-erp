@@ -2,6 +2,7 @@
 Django settings shared across environments.
 """
 
+from datetime import timedelta
 from pathlib import Path
 
 from decouple import config
@@ -49,6 +50,18 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
+    ],
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "100/hour",
+        "user": "1000/hour",
+        "login": "5/min",
+    },
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
 
@@ -58,8 +71,18 @@ SPECTACULAR_SETTINGS = {
     "VERSION": "1.0.0",
 }
 
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "ALGORITHM": "HS256",
+    "SIGNING_KEY": SECRET_KEY,
+    "AUTH_HEADER_TYPES": ("Bearer",),
+}
+
 DEFAULT_CURRENCY = config("DEFAULT_CURRENCY", default="EUR")
-CASHIER_DEVICE_TOKEN = config("CASHIER_DEVICE_TOKEN", default="")
+CASHIER_DEVICE_TOKEN = config("CASHIER_DEVICE_TOKEN", default=None)
 LOGIN_URL = "/cashier/login/"
 
 MIDDLEWARE = [
@@ -208,6 +231,7 @@ if LOG_RETENTION_ENABLED:
     }
 
 STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

@@ -10,6 +10,9 @@ Cashier views — тонкий HTTP-слой.
 """
 from __future__ import annotations
 
+import hashlib
+import hmac
+import time
 import uuid
 from decimal import Decimal, InvalidOperation
 
@@ -78,11 +81,39 @@ def _require_session_or_redirect(request: HttpRequest) -> CashierSession | HttpR
     return session
 
 
-def _device_token_ok(request: HttpRequest) -> bool:
+def _device_signature_ok(request: HttpRequest) -> bool:
     token = settings.CASHIER_DEVICE_TOKEN
     if not token:
-        return True
-    return request.headers.get("X-DEVICE-TOKEN") == token
+        return False
+
+    timestamp = request.headers.get("X-DEVICE-TS", "")
+    signature = request.headers.get("X-DEVICE-SIG", "")
+    if not timestamp or not signature:
+        return False
+
+    try:
+        timestamp_value = int(timestamp)
+    except (TypeError, ValueError):
+        return False
+
+    if abs(int(time.time()) - timestamp_value) > 60:
+        return False
+
+    payload = f"{timestamp}.{request.body.decode('utf-8')}".encode("utf-8")
+    expected_signature = hmac.new(
+        key=token.encode("utf-8"),
+        msg=payload,
+        digestmod=hashlib.sha256,
+    ).hexdigest()
+    return hmac.compare_digest(signature, expected_signature)
+
+
+def _device_auth_failed_response(request: HttpRequest) -> HttpResponse:
+    logger.warning(
+        "device_auth_failed",
+        ip=request.META.get("REMOTE_ADDR"),
+    )
+    return HttpResponse("invalid device signature", status=401)
 
 
 # ── Auth ─────────────────────────────────────────────────────────────────────
@@ -906,12 +937,8 @@ def order_refund(request: HttpRequest, public_id) -> HttpResponse:
 @csrf_exempt
 @require_http_methods(["POST"])
 def device_cash_confirm(request: HttpRequest, public_id) -> HttpResponse:
-    if not _device_token_ok(request):
-        logger.warning(
-            "cashier_device_cash_confirm_invalid_token",
-            payment_id=str(public_id),
-        )
-        return HttpResponseForbidden("invalid device token")
+    if not _device_signature_ok(request):
+        return _device_auth_failed_response(request)
 
     payment = get_object_or_404(OrderPayment, public_id=public_id)
     session = (
@@ -931,8 +958,8 @@ def device_cash_confirm(request: HttpRequest, public_id) -> HttpResponse:
 @csrf_exempt
 @require_http_methods(["POST"])
 def device_card_confirm(request: HttpRequest, public_id) -> HttpResponse:
-    if not _device_token_ok(request):
-        return HttpResponseForbidden("invalid device token")
+    if not _device_signature_ok(request):
+        return _device_auth_failed_response(request)
 
     payment = get_object_or_404(OrderPayment, public_id=public_id)
     session = (

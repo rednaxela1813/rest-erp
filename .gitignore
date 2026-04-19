@@ -48,8 +48,5 @@ project.zip
 
 celerybeat.pid
 celerybeat-schedule
-celerybeat-schedule-shm
-celerybeat-schedule-wal
-
-
-celerybeat-schedule*
+celerybeat-schedule-*
+*.db-journal

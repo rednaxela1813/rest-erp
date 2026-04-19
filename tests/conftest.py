@@ -3,10 +3,18 @@ import uuid
 from decimal import Decimal
 import pytest
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 
 
 # === НАСТРОЙКА: подстрой под твои URL, если отличаются ===
 JWT_LOGIN_URL = "/api/v1/auth/login/"  # поменяй, если у тебя другой
+
+
+@pytest.fixture(autouse=True)
+def clear_django_cache():
+    cache.clear()
+    yield
+    cache.clear()
 
 
 @pytest.fixture
