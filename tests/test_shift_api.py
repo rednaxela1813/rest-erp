@@ -34,10 +34,15 @@ def test_open_close_shift_and_report(admin_client, capture_payment_api):
         unit=unit,
         tax_rate=tax,
         unit_price=Decimal("5.00"),
-        
     )
-    
-    receive_stock(org=org, product=product, initial_qty=Decimal("10.000"), unit_cost=Decimal("1.00"), label_code=f"LOT-{product.name.upper()}")
+
+    receive_stock(
+        org=org,
+        product=product,
+        initial_qty=Decimal("10.000"),
+        unit_cost=Decimal("1.00"),
+        label_code=f"LOT-{product.name.upper()}",
+    )
 
     order = Order.objects.create(org=org)
     OrderItem.objects.create(

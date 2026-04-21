@@ -1,0 +1,39 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.11.8
+    hooks:
+      - id: ruff
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.15.0
+    hooks:
+      - id: mypy
+        pass_filenames: false
+        additional_dependencies:
+          - Django==6.0
+          - celery==5.4.0
+          - djangorestframework==3.16.1
+          - djangorestframework-simplejwt==5.3.1
+          - drf-spectacular==0.28.0
+          - psycopg==3.3.2
+          - psycopg-binary==3.3.2
+          - psycopg-pool==3.3.0
+          - python-decouple==3.8
+          - redis==5.0.8
+          - structlog==24.4.0
+          - django-stubs>=5.2.1,<5.3
+          - djangorestframework-stubs==3.16.1
+        args:
+          - --config-file=pyproject.toml
+          - apps
+          - config
+          - core
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-yaml
+      - id: check-added-large-files

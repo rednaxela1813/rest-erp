@@ -6,33 +6,52 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
-        ('contenttypes', '0002_remove_content_type_name'),
-        ('orgs', '0001_initial'),
+        ("contenttypes", "0002_remove_content_type_name"),
+        ("orgs", "0001_initial"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='AccountingEntry',
+            name="AccountingEntry",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('public_id', models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('entry_type', models.CharField(choices=[('sale', 'Продажа'), ('refund', 'Возврат'), ('stock_receipt', 'Приход товара')], max_length=32)),
-                ('amount', models.DecimalField(decimal_places=2, max_digits=12)),
-                ('tax_amount', models.DecimalField(decimal_places=2, max_digits=12)),
-                ('currency', models.CharField(default='EUR', max_length=3)),
-                ('transaction_date', models.DateField()),
-                ('source_object_id', models.PositiveIntegerField(blank=True, null=True)),
-                ('org', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='%(class)ss', to='orgs.organization')),
-                ('source_content_type', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='+', to='contenttypes.contenttype')),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("public_id", models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "entry_type",
+                    models.CharField(
+                        choices=[("sale", "Продажа"), ("refund", "Возврат"), ("stock_receipt", "Приход товара")],
+                        max_length=32,
+                    ),
+                ),
+                ("amount", models.DecimalField(decimal_places=2, max_digits=12)),
+                ("tax_amount", models.DecimalField(decimal_places=2, max_digits=12)),
+                ("currency", models.CharField(default="EUR", max_length=3)),
+                ("transaction_date", models.DateField()),
+                ("source_object_id", models.PositiveIntegerField(blank=True, null=True)),
+                (
+                    "org",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE, related_name="%(class)ss", to="orgs.organization"
+                    ),
+                ),
+                (
+                    "source_content_type",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="+",
+                        to="contenttypes.contenttype",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['-transaction_date', '-created_at'],
+                "ordering": ["-transaction_date", "-created_at"],
             },
         ),
     ]

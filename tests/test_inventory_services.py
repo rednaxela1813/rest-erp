@@ -18,6 +18,7 @@ pytestmark = pytest.mark.django_db
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_product(*, org, name="Cola") -> Product:
     unit = Unit.objects.create(org=org, name=f"{name} unit")
     tax_rate = TaxRate.objects.create(org=org, name=f"{name} tax", rate=Decimal("20.00"))
@@ -33,6 +34,7 @@ def _make_product(*, org, name="Cola") -> Product:
 # ---------------------------------------------------------------------------
 # receive_stock
 # ---------------------------------------------------------------------------
+
 
 def test_receive_stock_creates_lot_and_movement(org_factory):
     org = org_factory()
@@ -89,6 +91,7 @@ def test_receive_stock_movement_snapshots_unit_cost(org_factory):
 # ---------------------------------------------------------------------------
 # issue_by_scanned_lot
 # ---------------------------------------------------------------------------
+
 
 def test_issue_reduces_remaining_qty_and_creates_movement(org_factory):
     org = org_factory()
@@ -261,4 +264,3 @@ def test_insufficient_stock_does_not_modify_lot(org_factory):
     lot = StockLot.objects.get(org=org, label_code="LOT-SAFE")
     assert lot.remaining_qty == Decimal("3.000")
     assert lot.status == StockLot.Status.ACTIVE
-    

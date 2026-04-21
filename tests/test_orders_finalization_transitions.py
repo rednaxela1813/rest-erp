@@ -1,4 +1,4 @@
-#tests/test_orders_finalization_transitions.py
+# tests/test_orders_finalization_transitions.py
 import pytest
 from decimal import Decimal
 
@@ -46,8 +46,7 @@ def test_cannot_change_paid_order_back_to_draft(admin_client, payment_factory, c
     order.refresh_from_db()
     assert order.status == Order.STATUS_PAID
 
-    
-    
+
 def test_admin_can_cancel_draft_order(admin_client):
     client, user, org = admin_client
     from apps.orders.models import Order
@@ -64,10 +63,6 @@ def test_admin_can_cancel_draft_order(admin_client):
 
     order.refresh_from_db()
     assert order.status == Order.STATUS_CANCELLED
-
-
-
-
 
 
 def test_cannot_set_paid_after_cancelled(admin_client, payment_factory, capture_payment_api, lot_factory):

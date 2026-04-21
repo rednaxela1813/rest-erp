@@ -9,6 +9,7 @@ from django.db.models import Q
 
 from config.orgs.org_context import get_request_org
 from config.orgs.models import Organization, OrganizationMember
+from config.orgs.middleware import set_active_org_id
 
 from apps.logs_dashboard.models import LogEntry
 
@@ -22,7 +23,7 @@ def logs_list(request):
         org_candidate = request.GET.get("org")
         org_obj = Organization.objects.filter(public_id=org_candidate, members__user=request.user).first()
         if org_obj:
-            request.session["active_org_id"] = str(org_obj.public_id)
+            set_active_org_id(request, str(org_obj.public_id), source="logs_dashboard_query")
             logger.info(
                 "logs_dashboard_org_selected_from_query",
                 user_id=str(request.user.id),
@@ -36,7 +37,7 @@ def logs_list(request):
         # If user belongs to exactly one org, auto-select it.
         memberships = OrganizationMember.objects.filter(user=request.user).select_related("org")
         if memberships.count() == 1:
-            request.session["active_org_id"] = str(memberships[0].org.public_id)
+            set_active_org_id(request, str(memberships[0].org.public_id), source="logs_dashboard_auto")
             logger.info(
                 "logs_dashboard_auto_selected_single_org",
                 user_id=str(request.user.id),

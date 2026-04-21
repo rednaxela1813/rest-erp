@@ -14,6 +14,7 @@ def test_org_admin_can_create_order(admin_client):
     assert "id" not in data
 
     from apps.orders.models import Order
+
     assert Order.objects.filter(org=org).count() == 1
 
 

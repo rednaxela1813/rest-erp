@@ -6,64 +6,81 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
-        ('orgs', '0001_initial'),
+        ("orgs", "0001_initial"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='StockMovement',
+            name="StockMovement",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('public_id', models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('movement_type', models.CharField(choices=[('in', 'In'), ('out', 'Out'), ('writeoff', 'Write-off'), ('adjustment', 'Adjustment')], max_length=16)),
-                ('quantity', models.DecimalField(decimal_places=3, max_digits=12)),
-                ('unit_cost_snapshot', models.DecimalField(decimal_places=2, max_digits=12)),
-                ('reason', models.CharField(blank=True, default='', max_length=64)),
-                ('comment', models.TextField(blank=True, default='')),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("public_id", models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "movement_type",
+                    models.CharField(
+                        choices=[("in", "In"), ("out", "Out"), ("writeoff", "Write-off"), ("adjustment", "Adjustment")],
+                        max_length=16,
+                    ),
+                ),
+                ("quantity", models.DecimalField(decimal_places=3, max_digits=12)),
+                ("unit_cost_snapshot", models.DecimalField(decimal_places=2, max_digits=12)),
+                ("reason", models.CharField(blank=True, default="", max_length=64)),
+                ("comment", models.TextField(blank=True, default="")),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
             ],
             options={
-                'ordering': ['-created_at', '-id'],
+                "ordering": ["-created_at", "-id"],
             },
         ),
         migrations.CreateModel(
-            name='StorageLocation',
+            name="StorageLocation",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('public_id', models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('name', models.CharField(max_length=128)),
-                ('description', models.TextField(blank=True, default='')),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("public_id", models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("name", models.CharField(max_length=128)),
+                ("description", models.TextField(blank=True, default="")),
             ],
             options={
-                'ordering': ['name'],
+                "ordering": ["name"],
             },
         ),
         migrations.CreateModel(
-            name='StockLot',
+            name="StockLot",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('public_id', models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('label_code', models.CharField(blank=True, default='', max_length=64)),
-                ('batch_number', models.CharField(blank=True, default='', max_length=64)),
-                ('initial_qty', models.DecimalField(decimal_places=3, max_digits=12)),
-                ('remaining_qty', models.DecimalField(decimal_places=3, max_digits=12)),
-                ('unit_cost', models.DecimalField(decimal_places=2, max_digits=12)),
-                ('received_at', models.DateTimeField(blank=True, null=True)),
-                ('expires_at', models.DateTimeField(blank=True, null=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('status', models.CharField(choices=[('active', 'Active'), ('depleted', 'Depleted'), ('archived', 'Archived')], default='active', max_length=16)),
-                ('org', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='%(class)ss', to='orgs.organization')),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("public_id", models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("label_code", models.CharField(blank=True, default="", max_length=64)),
+                ("batch_number", models.CharField(blank=True, default="", max_length=64)),
+                ("initial_qty", models.DecimalField(decimal_places=3, max_digits=12)),
+                ("remaining_qty", models.DecimalField(decimal_places=3, max_digits=12)),
+                ("unit_cost", models.DecimalField(decimal_places=2, max_digits=12)),
+                ("received_at", models.DateTimeField(blank=True, null=True)),
+                ("expires_at", models.DateTimeField(blank=True, null=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[("active", "Active"), ("depleted", "Depleted"), ("archived", "Archived")],
+                        default="active",
+                        max_length=16,
+                    ),
+                ),
+                (
+                    "org",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE, related_name="%(class)ss", to="orgs.organization"
+                    ),
+                ),
             ],
             options={
-                'ordering': ['received_at', 'id'],
+                "ordering": ["received_at", "id"],
             },
         ),
     ]

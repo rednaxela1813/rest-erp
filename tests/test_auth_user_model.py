@@ -6,4 +6,3 @@ def test_get_user_model_is_custom_user():
     assert User.__module__ == "config.users.models"
     assert User.__name__ == "User"
     assert User.USERNAME_FIELD == "email"
-

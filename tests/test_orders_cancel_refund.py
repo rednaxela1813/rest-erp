@@ -3,7 +3,9 @@ from decimal import Decimal
 
 
 @pytest.mark.django_db
-def test_cancel_paid_order_restores_stock_and_sets_status_cancelled(admin_client, payment_factory, capture_payment_api, lot_factory):
+def test_cancel_paid_order_restores_stock_and_sets_status_cancelled(
+    admin_client, payment_factory, capture_payment_api, lot_factory
+):
     """
     GIVEN:
         - Заказ с двумя items на один продукт (qty=2 и qty=3)

@@ -6,15 +6,16 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('recipes', '0003_alter_recipeitem_quantity'),
+        ("recipes", "0003_alter_recipeitem_quantity"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='recipeitem',
-            name='quantity',
-            field=models.DecimalField(decimal_places=4, max_digits=10, validators=[django.core.validators.MinValueValidator(Decimal('0.001'))]),
+            model_name="recipeitem",
+            name="quantity",
+            field=models.DecimalField(
+                decimal_places=4, max_digits=10, validators=[django.core.validators.MinValueValidator(Decimal("0.001"))]
+            ),
         ),
     ]

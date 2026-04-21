@@ -55,11 +55,7 @@ def receive_stock(
             expires_at=expires_at,
             received_at=received_at or timezone.now(),
             status=StockLot.Status.ACTIVE,
-            
-            
         )
-
-       
 
         movement = StockMovement.objects.create(
             org=org,
@@ -70,7 +66,7 @@ def receive_stock(
             unit_cost_snapshot=unit_cost,
             comment=comment,
         )
-        
+
         record_stock_receipt(lot=lot)  # связать с функцией, которая создаёт запись в бухгалтерии
 
     logger.info(

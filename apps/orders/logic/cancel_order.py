@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-from decimal import Decimal
-
 from django.db import transaction
 from rest_framework.exceptions import ValidationError
 import structlog
 
+from apps.orders.logic.order_quantities import aggregate_order_quantities
 from apps.orders.models import Order
+from apps.orders.signals import order_cancelled
 
 logger = structlog.get_logger(__name__)
+
 
 def cancel_order(*, order: Order, actor=None) -> Order:
     """
@@ -37,62 +38,20 @@ def cancel_order(*, order: Order, actor=None) -> Order:
             raise ValidationError({"status": ["Only paid orders can be cancelled."]})
 
         items_qs = locked_order.items.select_related("product").prefetch_related(
-            "product__bundle_items__component"
+            "product__bundle_items__component",
+            "product__recipe__ingredients__product",
         )
         if not items_qs.exists():
             raise ValidationError({"order": "Cannot cancel order without items."})
 
-        qty_by_product_id: dict[int, Decimal] = {}
-        kitchen_qty_by_product_id: dict[int, Decimal] = {}
-        for item in items_qs:
-            if not item.product_id:
-                continue
-            item_qty = item.qty if isinstance(item.qty, Decimal) else Decimal(str(item.qty))
-            product = item.product
-            if product and product.is_bundle:
-                for bundle_item in product.bundle_items.all():
-                    component = bundle_item.component
-                    if not component:
-                        continue
-                    component_qty = item_qty * bundle_item.qty
-                    if component.requires_preparation:
-                        kitchen_qty_by_product_id[component.id] = kitchen_qty_by_product_id.get(
-                            component.id, Decimal("0")
-                        ) + component_qty
-                    else:
-                        qty_by_product_id[component.id] = qty_by_product_id.get(
-                            component.id, Decimal("0")
-                        ) + component_qty
-            else:
-                if product.requires_preparation:
-                    kitchen_qty_by_product_id[product.id] = kitchen_qty_by_product_id.get(
-                        product.id, Decimal("0")
-                    ) + item_qty
-                else:
-                    qty_by_product_id[product.id] = qty_by_product_id.get(
-                        product.id, Decimal("0")
-                    ) + item_qty
+        _, kitchen_qty_by_product_id = aggregate_order_quantities(items_qs)
 
-        from apps.products.models import Product
-
-        locked_products = Product.objects.select_for_update().filter(
-            id__in=list(qty_by_product_id.keys())
+        order_cancelled.send(
+            sender=Order,
+            order=locked_order,
+            items=items_qs,
+            user=actor,
         )
-        products_map = {p.id: p for p in locked_products}
-
-        from apps.inventory.services.deduct_stock import restore_stock
-        from apps.accounting.logic.record_stock_return import record_stock_return
-
-        for pid, total_qty in qty_by_product_id.items():
-            p = products_map[pid]
-            movement = restore_stock(
-                org=locked_order.org,
-                product=p,
-                quantity=total_qty,
-                reason="order_cancelled",
-                comment=str(locked_order.public_id),
-            )
-            record_stock_return(movement=movement)
 
         old_status = locked_order.status
         locked_order.status = Order.STATUS_CANCELLED
@@ -112,7 +71,7 @@ def cancel_order(*, order: Order, actor=None) -> Order:
             from_status=old_status,
             to_status=Order.STATUS_CANCELLED,
             actor=actor if actor is not None else None,
-     )
+        )
 
         logger.info(
             "order_cancelled",

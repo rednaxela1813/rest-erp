@@ -116,9 +116,7 @@ def test_release_due_device_commands_requeues_stale_sent_commands(org_factory, s
         idempotency_key="retry:fresh-sent",
         status=DeviceCommand.Status.SENT,
     )
-    DeviceCommand.objects.filter(id=stale_sent.id).update(
-        updated_at=timezone.now() - timedelta(seconds=30)
-    )
+    DeviceCommand.objects.filter(id=stale_sent.id).update(updated_at=timezone.now() - timedelta(seconds=30))
 
     released = release_due_device_commands(org=org)
 

@@ -3,6 +3,7 @@ Cashier session management.
 
 Открытие/закрытие смены, получение активной сессии, управление кассовым ящиком.
 """
+
 from __future__ import annotations
 
 from decimal import Decimal
@@ -29,8 +30,7 @@ def get_active_session(request: HttpRequest) -> CashierSession | None:
     if not session_id:
         return None
     session = (
-        CashierSession.objects
-        .select_related("org", "terminal")
+        CashierSession.objects.select_related("org", "terminal")
         .filter(pk=session_id, cashier=request.user, status=CashierSession.STATUS_OPEN)
         .first()
     )
@@ -60,8 +60,5 @@ def cash_drawer_total(session: CashierSession) -> Decimal:
         ),
     )
     return (
-        session.cash_drawer_start
-        + cash_movements["sale_cash"]
-        + cash_movements["cash_in"]
-        - cash_movements["cash_out"]
+        session.cash_drawer_start + cash_movements["sale_cash"] + cash_movements["cash_in"] - cash_movements["cash_out"]
     ).quantize(Decimal("0.01"))

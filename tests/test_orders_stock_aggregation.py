@@ -3,7 +3,9 @@ from decimal import Decimal
 
 
 @pytest.mark.django_db
-def test_pay_order_aggregates_qty_per_product_and_fails_if_total_exceeds_stock(admin_client, payment_factory, capture_payment_api, lot_factory):
+def test_pay_order_aggregates_qty_per_product_and_fails_if_total_exceeds_stock(
+    admin_client, payment_factory, capture_payment_api, lot_factory
+):
     """
     GIVEN:
         - Один заказ (draft)

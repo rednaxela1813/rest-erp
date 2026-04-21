@@ -8,126 +8,250 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
-        ('orgs', '0001_initial'),
+        ("orgs", "0001_initial"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='TaxRate',
+            name="TaxRate",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('public_id', models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('name', models.CharField(max_length=64)),
-                ('rate', models.DecimalField(decimal_places=2, max_digits=5)),
-                ('status', models.CharField(choices=[('active', 'Active'), ('archived', 'Archived')], default='active', max_length=16)),
-                ('org', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='%(class)ss', to='orgs.organization')),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("public_id", models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("name", models.CharField(max_length=64)),
+                ("rate", models.DecimalField(decimal_places=2, max_digits=5)),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[("active", "Active"), ("archived", "Archived")], default="active", max_length=16
+                    ),
+                ),
+                (
+                    "org",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE, related_name="%(class)ss", to="orgs.organization"
+                    ),
+                ),
             ],
             options={
-                'ordering': ['id'],
+                "ordering": ["id"],
             },
         ),
         migrations.CreateModel(
-            name='Unit',
+            name="Unit",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('public_id', models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('name', models.CharField(max_length=64)),
-                ('status', models.CharField(choices=[('active', 'Active'), ('archived', 'Archived')], default='active', max_length=16)),
-                ('org', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='%(class)ss', to='orgs.organization')),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("public_id", models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("name", models.CharField(max_length=64)),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[("active", "Active"), ("archived", "Archived")], default="active", max_length=16
+                    ),
+                ),
+                (
+                    "org",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE, related_name="%(class)ss", to="orgs.organization"
+                    ),
+                ),
             ],
             options={
-                'ordering': ['id'],
+                "ordering": ["id"],
             },
         ),
         migrations.CreateModel(
-            name='Product',
+            name="Product",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('public_id', models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('name', models.CharField(max_length=255)),
-                ('barcode', models.CharField(blank=True, db_index=True, default='', max_length=64)),
-                ('status', models.CharField(choices=[('active', 'Active'), ('archived', 'Archived')], default='active', max_length=16)),
-                ('is_bundle', models.BooleanField(default=False)),
-                ('requires_preparation', models.BooleanField(default=False)),
-                ('bundle_discount_percent', models.DecimalField(decimal_places=2, default=Decimal('0.00'), max_digits=5, validators=[django.core.validators.MinValueValidator(Decimal('0.00')), django.core.validators.MaxValueValidator(Decimal('100.00'))])),
-                ('unit_price', models.DecimalField(decimal_places=2, default=Decimal('0.00'), max_digits=12)),
-                ('org', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='%(class)ss', to='orgs.organization')),
-                ('tax_rate', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='products', to='products.taxrate')),
-                ('unit', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='products', to='products.unit')),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("public_id", models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("name", models.CharField(max_length=255)),
+                ("barcode", models.CharField(blank=True, db_index=True, default="", max_length=64)),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[("active", "Active"), ("archived", "Archived")], default="active", max_length=16
+                    ),
+                ),
+                ("is_bundle", models.BooleanField(default=False)),
+                ("requires_preparation", models.BooleanField(default=False)),
+                (
+                    "bundle_discount_percent",
+                    models.DecimalField(
+                        decimal_places=2,
+                        default=Decimal("0.00"),
+                        max_digits=5,
+                        validators=[
+                            django.core.validators.MinValueValidator(Decimal("0.00")),
+                            django.core.validators.MaxValueValidator(Decimal("100.00")),
+                        ],
+                    ),
+                ),
+                ("unit_price", models.DecimalField(decimal_places=2, default=Decimal("0.00"), max_digits=12)),
+                (
+                    "org",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE, related_name="%(class)ss", to="orgs.organization"
+                    ),
+                ),
+                (
+                    "tax_rate",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="products",
+                        to="products.taxrate",
+                    ),
+                ),
+                (
+                    "unit",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="products",
+                        to="products.unit",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['id'],
+                "ordering": ["id"],
             },
         ),
         migrations.CreateModel(
-            name='BundleItem',
+            name="BundleItem",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('qty', models.DecimalField(decimal_places=3, default=Decimal('1.000'), max_digits=12)),
-                ('bundle', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='bundle_items', to='products.product')),
-                ('component', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='bundle_components', to='products.product')),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("qty", models.DecimalField(decimal_places=3, default=Decimal("1.000"), max_digits=12)),
+                (
+                    "bundle",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE, related_name="bundle_items", to="products.product"
+                    ),
+                ),
+                (
+                    "component",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="bundle_components",
+                        to="products.product",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['id'],
-                'constraints': [models.UniqueConstraint(fields=('bundle', 'component'), name='uniq_bundle_component')],
+                "ordering": ["id"],
+                "constraints": [models.UniqueConstraint(fields=("bundle", "component"), name="uniq_bundle_component")],
             },
         ),
         migrations.CreateModel(
-            name='ProductAddon',
+            name="ProductAddon",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('public_id', models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
-                ('name', models.CharField(max_length=128)),
-                ('price', models.DecimalField(decimal_places=2, default=Decimal('0.00'), max_digits=12)),
-                ('status', models.CharField(choices=[('active', 'Active'), ('archived', 'Archived')], default='active', max_length=16)),
-                ('product', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='addons', to='products.product')),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("public_id", models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
+                ("name", models.CharField(max_length=128)),
+                ("price", models.DecimalField(decimal_places=2, default=Decimal("0.00"), max_digits=12)),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[("active", "Active"), ("archived", "Archived")], default="active", max_length=16
+                    ),
+                ),
+                (
+                    "product",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE, related_name="addons", to="products.product"
+                    ),
+                ),
             ],
             options={
-                'ordering': ['id'],
-                'constraints': [models.UniqueConstraint(condition=models.Q(('status', 'active')), fields=('product', 'name'), name='uniq_active_addon_name_per_product')],
+                "ordering": ["id"],
+                "constraints": [
+                    models.UniqueConstraint(
+                        condition=models.Q(("status", "active")),
+                        fields=("product", "name"),
+                        name="uniq_active_addon_name_per_product",
+                    )
+                ],
             },
         ),
         migrations.CreateModel(
-            name='ProductVariant',
+            name="ProductVariant",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('public_id', models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
-                ('name', models.CharField(max_length=64)),
-                ('sku', models.CharField(blank=True, db_index=True, default='', max_length=64)),
-                ('barcode', models.CharField(blank=True, db_index=True, default='', max_length=64)),
-                ('unit_price', models.DecimalField(decimal_places=2, default=Decimal('0.00'), max_digits=12)),
-                ('status', models.CharField(choices=[('active', 'Active'), ('archived', 'Archived')], default='active', max_length=16)),
-                ('product', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='variants', to='products.product')),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("public_id", models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
+                ("name", models.CharField(max_length=64)),
+                ("sku", models.CharField(blank=True, db_index=True, default="", max_length=64)),
+                ("barcode", models.CharField(blank=True, db_index=True, default="", max_length=64)),
+                ("unit_price", models.DecimalField(decimal_places=2, default=Decimal("0.00"), max_digits=12)),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[("active", "Active"), ("archived", "Archived")], default="active", max_length=16
+                    ),
+                ),
+                (
+                    "product",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE, related_name="variants", to="products.product"
+                    ),
+                ),
             ],
             options={
-                'ordering': ['id'],
-                'constraints': [models.UniqueConstraint(condition=models.Q(('status', 'active')), fields=('product', 'name'), name='uniq_active_variant_name_per_product'), models.UniqueConstraint(condition=models.Q(('sku__gt', '')), fields=('product', 'sku'), name='uniq_variant_sku_per_product'), models.UniqueConstraint(condition=models.Q(('barcode__gt', '')), fields=('product', 'barcode'), name='uniq_variant_barcode_per_product')],
+                "ordering": ["id"],
+                "constraints": [
+                    models.UniqueConstraint(
+                        condition=models.Q(("status", "active")),
+                        fields=("product", "name"),
+                        name="uniq_active_variant_name_per_product",
+                    ),
+                    models.UniqueConstraint(
+                        condition=models.Q(("sku__gt", "")),
+                        fields=("product", "sku"),
+                        name="uniq_variant_sku_per_product",
+                    ),
+                    models.UniqueConstraint(
+                        condition=models.Q(("barcode__gt", "")),
+                        fields=("product", "barcode"),
+                        name="uniq_variant_barcode_per_product",
+                    ),
+                ],
             },
         ),
         migrations.AddConstraint(
-            model_name='taxrate',
-            constraint=models.UniqueConstraint(condition=models.Q(('status', 'active')), fields=('org', 'name'), name='uniq_active_taxrate_name_per_org'),
+            model_name="taxrate",
+            constraint=models.UniqueConstraint(
+                condition=models.Q(("status", "active")),
+                fields=("org", "name"),
+                name="uniq_active_taxrate_name_per_org",
+            ),
         ),
         migrations.AddConstraint(
-            model_name='unit',
-            constraint=models.UniqueConstraint(condition=models.Q(('status', 'active')), fields=('org', 'name'), name='uniq_active_unit_name_per_org'),
+            model_name="unit",
+            constraint=models.UniqueConstraint(
+                condition=models.Q(("status", "active")), fields=("org", "name"), name="uniq_active_unit_name_per_org"
+            ),
         ),
         migrations.AddConstraint(
-            model_name='product',
-            constraint=models.UniqueConstraint(condition=models.Q(('status', 'active')), fields=('org', 'name'), name='uniq_active_product_name_per_org'),
+            model_name="product",
+            constraint=models.UniqueConstraint(
+                condition=models.Q(("status", "active")),
+                fields=("org", "name"),
+                name="uniq_active_product_name_per_org",
+            ),
         ),
         migrations.AddConstraint(
-            model_name='product',
-            constraint=models.UniqueConstraint(condition=models.Q(('barcode__gt', '')), fields=('org', 'barcode'), name='uniq_product_barcode_per_org'),
+            model_name="product",
+            constraint=models.UniqueConstraint(
+                condition=models.Q(("barcode__gt", "")), fields=("org", "barcode"), name="uniq_product_barcode_per_org"
+            ),
         ),
     ]

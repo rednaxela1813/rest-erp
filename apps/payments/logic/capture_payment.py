@@ -81,12 +81,14 @@ def capture_payment(*, payment: OrderPayment, actor=None, timeout_s: int = 30) -
         enqueue_payment_commands(payment=payment, include_kot=include_kot)
         if requires_post_fiscal_finalization:
             from apps.payments.tasks import process_device_commands_ekasa
+
             process_device_commands_ekasa.delay(org_id=payment.org_id, limit=50)
 
     logger.info(
         "payment_capture_succeeded",
         payment_id=str(payment.public_id),
         order_id=str(payment.order.public_id),
-        fiscal_receipt_created=payment.tender == OrderPayment.Tender.CARD and not _requires_post_fiscal_finalization(payment=payment),
+        fiscal_receipt_created=payment.tender == OrderPayment.Tender.CARD
+        and not _requires_post_fiscal_finalization(payment=payment),
     )
     return payment

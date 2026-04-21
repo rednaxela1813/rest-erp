@@ -30,8 +30,7 @@ def open_shift(*, org, terminal, cashier, opening_cash: Decimal) -> CashierSessi
     )
     with transaction.atomic():
         existing = (
-            CashierSession.objects
-            .select_for_update()
+            CashierSession.objects.select_for_update()
             .filter(org=org, terminal=terminal, status=CashierSession.STATUS_OPEN)
             .first()
         )
@@ -137,17 +136,13 @@ def shift_report(*, session: CashierSession) -> dict:
     )
     end_ts = session.closed_at or timezone.now()
 
-    payments = (
-        OrderPayment.objects
-        .filter(
-            org=session.org,
-            terminal=session.terminal,
-            status=OrderPayment.Status.CAPTURED,
-            created_at__gte=session.opened_at,
-            created_at__lte=end_ts,
-        )
-        .select_related("order")
-    )
+    payments = OrderPayment.objects.filter(
+        org=session.org,
+        terminal=session.terminal,
+        status=OrderPayment.Status.CAPTURED,
+        created_at__gte=session.opened_at,
+        created_at__lte=end_ts,
+    ).select_related("order")
 
     total_amount = sum((p.amount for p in payments), Decimal("0.00"))
     totals_by_tender: dict[str, Decimal] = {}
@@ -156,11 +151,7 @@ def shift_report(*, session: CashierSession) -> dict:
 
     # Aggregate tax by rate using order items in the same window.
     order_ids = [p.order_id for p in payments if p.order_id]
-    items = (
-        OrderItem.objects
-        .filter(order_id__in=order_ids)
-        .select_related("tax_rate")
-    )
+    items = OrderItem.objects.filter(order_id__in=order_ids).select_related("tax_rate")
 
     tax_by_rate: dict[str, Decimal] = {}
     total_tax = Decimal("0.00")

@@ -7,83 +7,106 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
-        ('orgs', '0001_initial'),
+        ("orgs", "0001_initial"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='Order',
+            name="Order",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('public_id', models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('status', models.CharField(choices=[('draft', 'Draft'), ('paid', 'Paid'), ('cancelled', 'Cancelled')], default='draft', max_length=16)),
-                ('subtotal', models.DecimalField(decimal_places=2, default=Decimal('0.00'), max_digits=12)),
-                ('tax_total', models.DecimalField(decimal_places=2, default=Decimal('0.00'), max_digits=12)),
-                ('total', models.DecimalField(decimal_places=2, default=Decimal('0.00'), max_digits=12)),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("public_id", models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[("draft", "Draft"), ("paid", "Paid"), ("cancelled", "Cancelled")],
+                        default="draft",
+                        max_length=16,
+                    ),
+                ),
+                ("subtotal", models.DecimalField(decimal_places=2, default=Decimal("0.00"), max_digits=12)),
+                ("tax_total", models.DecimalField(decimal_places=2, default=Decimal("0.00"), max_digits=12)),
+                ("total", models.DecimalField(decimal_places=2, default=Decimal("0.00"), max_digits=12)),
             ],
             options={
-                'ordering': ['id'],
+                "ordering": ["id"],
             },
         ),
         migrations.CreateModel(
-            name='OrderItem',
+            name="OrderItem",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('public_id', models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
-                ('product_name', models.CharField(max_length=255)),
-                ('qty', models.DecimalField(decimal_places=3, default=Decimal('1.000'), max_digits=12)),
-                ('note', models.CharField(blank=True, default='', max_length=255)),
-                ('unit_price', models.DecimalField(decimal_places=2, default=Decimal('0.00'), max_digits=12)),
-                ('variant_name', models.CharField(blank=True, default='', max_length=64)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("public_id", models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
+                ("product_name", models.CharField(max_length=255)),
+                ("qty", models.DecimalField(decimal_places=3, default=Decimal("1.000"), max_digits=12)),
+                ("note", models.CharField(blank=True, default="", max_length=255)),
+                ("unit_price", models.DecimalField(decimal_places=2, default=Decimal("0.00"), max_digits=12)),
+                ("variant_name", models.CharField(blank=True, default="", max_length=64)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
             ],
             options={
-                'ordering': ['id'],
+                "ordering": ["id"],
             },
         ),
         migrations.CreateModel(
-            name='OrderItemAddon',
+            name="OrderItemAddon",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(max_length=255)),
-                ('price', models.DecimalField(decimal_places=2, default=Decimal('0.00'), max_digits=12)),
-                ('qty', models.DecimalField(decimal_places=3, default=Decimal('1.000'), max_digits=12)),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("name", models.CharField(max_length=255)),
+                ("price", models.DecimalField(decimal_places=2, default=Decimal("0.00"), max_digits=12)),
+                ("qty", models.DecimalField(decimal_places=3, default=Decimal("1.000"), max_digits=12)),
             ],
             options={
-                'ordering': ['id'],
+                "ordering": ["id"],
             },
         ),
         migrations.CreateModel(
-            name='OrderStatusEvent',
+            name="OrderStatusEvent",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('public_id', models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
-                ('from_status', models.CharField(max_length=32)),
-                ('to_status', models.CharField(max_length=32)),
-                ('reason', models.CharField(blank=True, default='', max_length=255)),
-                ('metadata', models.JSONField(blank=True, default=dict)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("public_id", models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
+                ("from_status", models.CharField(max_length=32)),
+                ("to_status", models.CharField(max_length=32)),
+                ("reason", models.CharField(blank=True, default="", max_length=255)),
+                ("metadata", models.JSONField(blank=True, default=dict)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
             ],
         ),
         migrations.CreateModel(
-            name='KitchenTicket',
+            name="KitchenTicket",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('public_id', models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('qty', models.DecimalField(decimal_places=3, default=Decimal('1.000'), max_digits=12)),
-                ('status', models.CharField(choices=[('pending', 'Pending'), ('in_progress', 'In progress'), ('done', 'Done'), ('cancelled', 'Cancelled')], default='pending', max_length=16)),
-                ('org', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='%(class)ss', to='orgs.organization')),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("public_id", models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("qty", models.DecimalField(decimal_places=3, default=Decimal("1.000"), max_digits=12)),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[
+                            ("pending", "Pending"),
+                            ("in_progress", "In progress"),
+                            ("done", "Done"),
+                            ("cancelled", "Cancelled"),
+                        ],
+                        default="pending",
+                        max_length=16,
+                    ),
+                ),
+                (
+                    "org",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE, related_name="%(class)ss", to="orgs.organization"
+                    ),
+                ),
             ],
             options={
-                'ordering': ['-created_at'],
+                "ordering": ["-created_at"],
             },
         ),
     ]

@@ -57,6 +57,3 @@ def test_cannot_patch_order_totals(admin_client):
     assert order.subtotal == 0
     assert order.tax_total == 0
     assert order.total == 0
-    
-    
-

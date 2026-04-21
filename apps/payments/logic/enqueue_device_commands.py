@@ -13,6 +13,7 @@ def _build_idempotency_key(*, command_type: str, payment_id: int) -> str:
     """
     return f"{command_type}:{payment_id}"
 
+
 def _build_fiscal_items(*, payment: OrderPayment) -> list[dict]:
     """
     Build a stable list of fiscal line items for device commands.
@@ -75,9 +76,7 @@ def enqueue_payment_commands(
     for command_type in command_specs:
         DeviceCommand.objects.get_or_create(
             org=payment.org,
-            idempotency_key=_build_idempotency_key(
-                command_type=command_type, payment_id=payment.id
-            ),
+            idempotency_key=_build_idempotency_key(command_type=command_type, payment_id=payment.id),
             defaults={
                 "order": payment.order,
                 "payment": payment,
@@ -110,9 +109,7 @@ def enqueue_refund_commands(*, payment: OrderPayment, receipt_public_id: str) ->
     for command_type in command_specs:
         DeviceCommand.objects.get_or_create(
             org=payment.org,
-            idempotency_key=_build_idempotency_key(
-                command_type=command_type, payment_id=payment.id
-            ),
+            idempotency_key=_build_idempotency_key(command_type=command_type, payment_id=payment.id),
             defaults={
                 "order": payment.order,
                 "payment": payment,
@@ -146,9 +143,7 @@ def enqueue_storno_commands(*, payment: OrderPayment, receipt_public_id: str) ->
     for command_type in command_specs:
         DeviceCommand.objects.get_or_create(
             org=payment.org,
-            idempotency_key=_build_idempotency_key(
-                command_type=command_type, payment_id=payment.id
-            ),
+            idempotency_key=_build_idempotency_key(command_type=command_type, payment_id=payment.id),
             defaults={
                 "order": payment.order,
                 "payment": payment,

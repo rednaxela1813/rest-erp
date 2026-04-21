@@ -47,9 +47,7 @@ INSTALLED_APPS = [
 AUTH_USER_MODEL = "users.User"
 
 REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": (
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
-    ),
+    "DEFAULT_AUTHENTICATION_CLASSES": ("rest_framework_simplejwt.authentication.JWTAuthentication",),
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
     ],
@@ -173,12 +171,15 @@ CELERY_BEAT_SCHEDULE = {
 DEVICE_COMMANDS_REDIS_URL = config("DEVICE_COMMANDS_REDIS_URL", default=CELERY_BROKER_URL)
 DEVICE_COMMANDS_STREAM = config("DEVICE_COMMANDS_STREAM", default="device_commands")
 DEVICE_COMMANDS_STREAM_MAXLEN = config("DEVICE_COMMANDS_STREAM_MAXLEN", cast=int, default=10000)
-DEVICE_COMMANDS_RETRY_BASE_SECONDS = config(
-    "DEVICE_COMMANDS_RETRY_BASE_SECONDS", cast=int, default=10
+DEVICE_COMMANDS_RETRY_BASE_SECONDS = config("DEVICE_COMMANDS_RETRY_BASE_SECONDS", cast=int, default=10)
+DEVICE_COMMANDS_RETRY_MAX_SECONDS = config("DEVICE_COMMANDS_RETRY_MAX_SECONDS", cast=int, default=300)
+CORS_ALLOWED_ORIGINS = config(
+    "CORS_ALLOWED_ORIGINS",
+    cast=lambda v: [s.strip() for s in v.split(",") if s.strip()],
+    default="",
 )
-DEVICE_COMMANDS_RETRY_MAX_SECONDS = config(
-    "DEVICE_COMMANDS_RETRY_MAX_SECONDS", cast=int, default=300
-)
+CORS_ALLOW_CREDENTIALS = config("CORS_ALLOW_CREDENTIALS", cast=bool, default=True)
+CSP_REPORT_ONLY = config("CSP_REPORT_ONLY", cast=bool, default=False)
 
 FISCAL_MOCK_ENABLED = config("FISCAL_MOCK_ENABLED", cast=bool, default=False)
 FISCAL_MOCK_OFFLINE = config("FISCAL_MOCK_OFFLINE", cast=bool, default=False)
@@ -196,6 +197,7 @@ LOG_RETENTION_DAYS = config("LOG_RETENTION_DAYS", cast=int, default=30)
 
 if FISCAL_MOCK_ENABLED and EKASA_ENABLED:
     from django.core.exceptions import ImproperlyConfigured
+
     raise ImproperlyConfigured(
         "FISCAL_MOCK_ENABLED and EKASA_ENABLED cannot both be True. "
         "Mock mode simulates fiscalization locally; eKasa mode calls the real NineDigit API. "

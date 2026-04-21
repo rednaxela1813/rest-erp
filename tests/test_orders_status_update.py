@@ -1,10 +1,8 @@
-#tests/test_orders_status_update.py
+# tests/test_orders_status_update.py
 import pytest
 from decimal import Decimal
 
 pytestmark = pytest.mark.django_db
-
-
 
 
 def test_admin_can_set_order_status_to_paid(admin_client, payment_factory, capture_payment_api, lot_factory):
@@ -38,7 +36,7 @@ def test_admin_can_set_order_status_to_paid(admin_client, payment_factory, captu
 
     order.refresh_from_db()
     assert order.status == Order.STATUS_PAID
-    
+
 
 def test_admin_cannot_set_order_status_to_paid_directly(admin_client, lot_factory):
     client, user, org = admin_client
@@ -72,9 +70,6 @@ def test_admin_cannot_set_order_status_to_paid_directly(admin_client, lot_factor
     )
     assert resp.status_code == 400
     assert resp.json() == {"status": ["Direct order payment is blocked. Use payment capture endpoint."]}
-
-
-
 
 
 def test_member_cannot_change_order_status(member_client, payment_factory, capture_payment_api):

@@ -15,6 +15,7 @@ pytestmark = pytest.mark.django_db
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_product(*, org, name="Бургер") -> Product:
     unit = Unit.objects.create(org=org, name=f"{name}-unit")
     tax_rate = TaxRate.objects.create(org=org, name=f"{name}-tax", rate=Decimal("20.00"))
@@ -49,6 +50,7 @@ def _make_paid_order(*, org) -> Order:
 # Тесты
 # ---------------------------------------------------------------------------
 
+
 def test_record_sale_creates_entry(org_factory):
     org = org_factory()
     order = _make_paid_order(org=org)
@@ -60,8 +62,8 @@ def test_record_sale_creates_entry(org_factory):
     assert entry.amount == order.total
     assert entry.tax_amount == order.tax_total
     assert entry.org == org
-    
-    
+
+
 def test_record_sale_export_status_is_pending(org_factory):
     # Каждая новая запись должна ждать экспорта в Money S3
     org = org_factory()

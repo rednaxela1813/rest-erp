@@ -22,7 +22,10 @@ urlpatterns = [
     path("orders/<uuid:public_id>/storno/", OrderStornoApi.as_view(), name="orders-storno"),
     path("kitchen/tickets/", KitchenTicketListApi.as_view(), name="kitchen-tickets"),
     path("kitchen/tickets/next/", KitchenTicketClaimNextApi.as_view(), name="kitchen-tickets-next"),
-    path("kitchen/tickets/next-with-queue/", KitchenTicketClaimNextWithQueueApi.as_view(), name="kitchen-tickets-next-with-queue"),
+    path(
+        "kitchen/tickets/next-with-queue/",
+        KitchenTicketClaimNextWithQueueApi.as_view(),
+        name="kitchen-tickets-next-with-queue",
+    ),
     path("kitchen/tickets/<uuid:public_id>/", KitchenTicketUpdateApi.as_view(), name="kitchen-ticket-detail"),
-
 ]

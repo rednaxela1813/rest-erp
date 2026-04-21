@@ -31,6 +31,7 @@ def test_create_org_creates_owner_membership(auth_client):
 
     # проверяем в базе membership owner
     from config.orgs.models import Organization, OrganizationMember
+
     org = Organization.objects.get(public_id=data["public_id"])
     m = OrganizationMember.objects.get(org=org)
     assert m.role == "owner"

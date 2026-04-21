@@ -6,92 +6,133 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
-        ('orders', '0001_initial'),
-        ('orgs', '0001_initial'),
-        ('products', '0001_initial'),
+        ("orders", "0001_initial"),
+        ("orgs", "0001_initial"),
+        ("products", "0001_initial"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='kitchenticket',
-            name='product',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='kitchen_tickets', to='products.product'),
+            model_name="kitchenticket",
+            name="product",
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.PROTECT, related_name="kitchen_tickets", to="products.product"
+            ),
         ),
         migrations.AddField(
-            model_name='order',
-            name='org',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='%(class)ss', to='orgs.organization'),
+            model_name="order",
+            name="org",
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.CASCADE, related_name="%(class)ss", to="orgs.organization"
+            ),
         ),
         migrations.AddField(
-            model_name='kitchenticket',
-            name='order',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='kitchen_tickets', to='orders.order'),
+            model_name="kitchenticket",
+            name="order",
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.CASCADE, related_name="kitchen_tickets", to="orders.order"
+            ),
         ),
         migrations.AddField(
-            model_name='orderitem',
-            name='order',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='items', to='orders.order'),
+            model_name="orderitem",
+            name="order",
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.CASCADE, related_name="items", to="orders.order"
+            ),
         ),
         migrations.AddField(
-            model_name='orderitem',
-            name='product',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='order_items', to='products.product'),
+            model_name="orderitem",
+            name="product",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name="order_items",
+                to="products.product",
+            ),
         ),
         migrations.AddField(
-            model_name='orderitem',
-            name='tax_rate',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='order_items', to='products.taxrate'),
+            model_name="orderitem",
+            name="tax_rate",
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.PROTECT, related_name="order_items", to="products.taxrate"
+            ),
         ),
         migrations.AddField(
-            model_name='orderitem',
-            name='unit',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='order_items', to='products.unit'),
+            model_name="orderitem",
+            name="unit",
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.PROTECT, related_name="order_items", to="products.unit"
+            ),
         ),
         migrations.AddField(
-            model_name='orderitem',
-            name='variant',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='order_items', to='products.productvariant'),
+            model_name="orderitem",
+            name="variant",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name="order_items",
+                to="products.productvariant",
+            ),
         ),
         migrations.AddField(
-            model_name='orderitemaddon',
-            name='addon',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='order_item_addons', to='products.productaddon'),
+            model_name="orderitemaddon",
+            name="addon",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="order_item_addons",
+                to="products.productaddon",
+            ),
         ),
         migrations.AddField(
-            model_name='orderitemaddon',
-            name='order_item',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='addons', to='orders.orderitem'),
+            model_name="orderitemaddon",
+            name="order_item",
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.CASCADE, related_name="addons", to="orders.orderitem"
+            ),
         ),
         migrations.AddField(
-            model_name='orderstatusevent',
-            name='actor',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='order_status_events', to=settings.AUTH_USER_MODEL),
+            model_name="orderstatusevent",
+            name="actor",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="order_status_events",
+                to=settings.AUTH_USER_MODEL,
+            ),
         ),
         migrations.AddField(
-            model_name='orderstatusevent',
-            name='order',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='status_events', to='orders.order'),
+            model_name="orderstatusevent",
+            name="order",
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.CASCADE, related_name="status_events", to="orders.order"
+            ),
         ),
         migrations.AddField(
-            model_name='orderstatusevent',
-            name='org',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='order_status_events', to='orgs.organization'),
+            model_name="orderstatusevent",
+            name="org",
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.PROTECT, related_name="order_status_events", to="orgs.organization"
+            ),
         ),
         migrations.AddIndex(
-            model_name='kitchenticket',
-            index=models.Index(fields=['org', 'status', 'created_at'], name='orders_kitc_org_id_813a98_idx'),
+            model_name="kitchenticket",
+            index=models.Index(fields=["org", "status", "created_at"], name="orders_kitc_org_id_813a98_idx"),
         ),
         migrations.AddIndex(
-            model_name='orderstatusevent',
-            index=models.Index(fields=['org', 'order', 'created_at'], name='orders_orde_org_id_5adbd9_idx'),
+            model_name="orderstatusevent",
+            index=models.Index(fields=["org", "order", "created_at"], name="orders_orde_org_id_5adbd9_idx"),
         ),
         migrations.AddIndex(
-            model_name='orderstatusevent',
-            index=models.Index(fields=['order', 'created_at'], name='orders_orde_order_i_1e3f4d_idx'),
+            model_name="orderstatusevent",
+            index=models.Index(fields=["order", "created_at"], name="orders_orde_order_i_1e3f4d_idx"),
         ),
     ]

@@ -18,6 +18,7 @@ def test_capture_payment_uses_usecase_function(admin_client, payment_factory, ca
         return payment
 
     import apps.payments.api_views as api_views
+
     monkeypatch.setattr(api_views, "capture_payment", fake_capture_payment)
 
     resp = capture_payment_api(client, payment)

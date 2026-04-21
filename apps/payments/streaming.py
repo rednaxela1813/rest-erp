@@ -21,14 +21,17 @@ def _serialize_command(command: DeviceCommand) -> dict[str, str]:
 
     Redis Streams accept string values only, so we JSON-encode payloads.
     """
+    order_public_id = str(command.order.public_id) if command.order is not None else ""
+    payment_public_id = str(command.payment.public_id) if command.payment is not None else ""
+
     return {
         "public_id": str(command.public_id),
         "org_id": str(command.org_id),
         "command_type": command.command_type,
         "status": command.status,
         "payload": json.dumps(command.payload, ensure_ascii=True),
-        "order": str(command.order.public_id) if command.order_id else "",
-        "payment": str(command.payment.public_id) if command.payment_id else "",
+        "order": order_public_id,
+        "payment": payment_public_id,
         "retries": str(command.retries),
         "max_retries": str(command.max_retries),
         "created_at": command.created_at.isoformat(),

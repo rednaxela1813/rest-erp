@@ -51,9 +51,7 @@ def test_order_item_create_taxrate_from_other_org_returns_400(admin_client, org_
     unit = Unit.objects.create(org=org_a, name="pcs", status=Unit.STATUS_ACTIVE)
 
     org_b = org_factory(name="Foreign Org")
-    foreign_tax = TaxRate.objects.create(
-        org=org_b, name="DPH 10%", rate=Decimal("10.00"), status=TaxRate.STATUS_ACTIVE
-    )
+    foreign_tax = TaxRate.objects.create(org=org_b, name="DPH 10%", rate=Decimal("10.00"), status=TaxRate.STATUS_ACTIVE)
 
     resp = client.post(
         f"/api/v1/orders/{order.public_id}/items/",

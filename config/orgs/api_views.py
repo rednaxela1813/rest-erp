@@ -1,37 +1,15 @@
-#config/orgs/api_views.py
-
-from rest_framework.generics import ListAPIView, CreateAPIView
+from rest_framework import generics, status
+from rest_framework.exceptions import PermissionDenied
+from rest_framework.generics import CreateAPIView, ListAPIView, ListCreateAPIView
 from rest_framework.permissions import IsAuthenticated
-
-from .models import Organization, OrganizationMember
-from .serializers import OrganizationSerializer, OrgNoteSerializer, OrgMemberListSerializer, OrgMemberUpdateSerializer
-
-
-
-from rest_framework.views import APIView
 from rest_framework.response import Response
-from .org_context import get_request_org
-
-
-from rest_framework.generics import ListCreateAPIView
+from rest_framework.views import APIView
 
 from .drf_mixins import OrgScopedQuerysetMixin
-from .models import OrgNote
-from .serializers import OrgNoteSerializer
-
+from .models import OrgNote, Organization, OrganizationMember
+from .org_context import get_request_org
 from .permissions import IsOrgMemberReadOnlyOrOrgAdmin
-
-from rest_framework import generics, status
-from rest_framework.permissions import IsAuthenticated
-
-from config.orgs.models import OrganizationMember
-from config.orgs.serializers import OrgMemberListSerializer
-
-from config.orgs.permissions import IsOrgMemberReadOnlyOrOrgAdmin
-from rest_framework.exceptions import PermissionDenied
-
-
-
+from .serializers import OrganizationSerializer, OrgMemberListSerializer, OrgMemberUpdateSerializer, OrgNoteSerializer
 
 
 class MyOrganizationsView(ListAPIView):
@@ -51,6 +29,7 @@ class OrganizationCreateView(CreateAPIView):
         org = serializer.save()
         OrganizationMember.objects.create(org=org, user=self.request.user, role="owner")
 
+
 class OrgContextView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -58,53 +37,47 @@ class OrgContextView(APIView):
         org = get_request_org(request)
         data = OrganizationSerializer(org).data
         return Response(data)
-    
-    
+
+
 class OrgNoteListCreateView(OrgScopedQuerysetMixin, ListCreateAPIView):
     permission_classes = [IsAuthenticated, IsOrgMemberReadOnlyOrOrgAdmin]
     queryset = OrgNote.objects.all()
     serializer_class = OrgNoteSerializer
-    
-    
+
+
 class OrgMemberListApi(generics.ListAPIView):
     """
     GET /api/v1/orgs/members/
     Список участников активной организации (X-ORG-ID).
     """
+
     serializer_class = OrgMemberListSerializer
     permission_classes = [IsAuthenticated, IsOrgMemberReadOnlyOrOrgAdmin]
 
     def get_queryset(self):
         org = get_request_org(self.request)
-        return (
-            OrganizationMember.objects
-            .select_related("user")
-            .filter(org=org)
-            .order_by("id")
-        )
-        
+        return OrganizationMember.objects.select_related("user").filter(org=org).order_by("id")
+
 
 class OrgMemberListCreateApi(generics.ListCreateAPIView):
     """
     GET  /api/v1/orgs/members/  -> list members (SAFE всем членам org)
     POST /api/v1/orgs/members/  -> add member (только owner/admin)
     """
+
     permission_classes = [IsAuthenticated, IsOrgMemberReadOnlyOrOrgAdmin]
 
     def get_queryset(self):
         org = get_request_org(self.request)
-        return (
-            OrganizationMember.objects
-            .select_related("user")
-            .filter(org=org)
-            .order_by("id")
-        )
+        return OrganizationMember.objects.select_related("user").filter(org=org).order_by("id")
 
     def get_serializer_class(self):
         if self.request.method == "POST":
             from .serializers import OrgMemberCreateSerializer
+
             return OrgMemberCreateSerializer
         from .serializers import OrgMemberListSerializer
+
         return OrgMemberListSerializer
 
     def perform_create(self, serializer):
@@ -117,6 +90,7 @@ class OrgMemberDetailApi(generics.RetrieveUpdateDestroyAPIView):
     PATCH /api/v1/orgs/members/<id>/   change role
     DELETE /api/v1/orgs/members/<id>/  remove member
     """
+
     permission_classes = [IsAuthenticated, IsOrgMemberReadOnlyOrOrgAdmin]
     lookup_field = "id"
 
@@ -132,7 +106,7 @@ class OrgMemberDetailApi(generics.RetrieveUpdateDestroyAPIView):
     def _guard_owner_demote(self, request, instance):
         new_role = request.data.get("role")
 
-        # интересует только попытка изменить owner -> НЕ owner
+        # Only handle attempts to demote an owner.
         if instance.role != "owner":
             return None
         if not new_role or new_role == "owner":
@@ -174,7 +148,7 @@ class OrgMemberDetailApi(generics.RetrieveUpdateDestroyAPIView):
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
 
-        # guard: нельзя удалить последнего owner
+        # Prevent removing the last owner.
         if instance.role == "owner":
             owners_count = OrganizationMember.objects.filter(org=instance.org, role="owner").count()
             if owners_count <= 1:

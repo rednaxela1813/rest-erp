@@ -11,6 +11,7 @@ from apps.payments.models import FiscalReceipt, OrderPayment
 
 logger = structlog.get_logger(__name__)
 
+
 def storno_paid_order(*, order: Order, actor=None) -> FiscalReceipt:
     """
     Use-case: storno a paid order.
@@ -25,8 +26,7 @@ def storno_paid_order(*, order: Order, actor=None) -> FiscalReceipt:
     # Idempotency: if order is already cancelled and storno receipt exists, return it.
     if order.status == Order.STATUS_CANCELLED:
         existing = (
-            FiscalReceipt.objects
-            .filter(order=order, receipt_type=FiscalReceipt.Type.STORNO)
+            FiscalReceipt.objects.filter(order=order, receipt_type=FiscalReceipt.Type.STORNO)
             .order_by("-created_at")
             .first()
         )
@@ -38,11 +38,7 @@ def storno_paid_order(*, order: Order, actor=None) -> FiscalReceipt:
         raise ValidationError({"order": ["Only paid orders can be stornoed."]})
 
     # Find the latest captured payment to link storno receipt.
-    payment = (
-        order.payments.filter(status=OrderPayment.Status.CAPTURED)
-        .order_by("-created_at")
-        .first()
-    )
+    payment = order.payments.filter(status=OrderPayment.Status.CAPTURED).order_by("-created_at").first()
     if payment is None:
         raise ValidationError({"payment": ["Captured payment is required for storno."]})
 
@@ -66,8 +62,7 @@ def storno_paid_order(*, order: Order, actor=None) -> FiscalReceipt:
 
         # Use the original eKasa receipt reference if available.
         sale_receipt = (
-            FiscalReceipt.objects
-            .filter(payment=payment, receipt_type=FiscalReceipt.Type.SALE)
+            FiscalReceipt.objects.filter(payment=payment, receipt_type=FiscalReceipt.Type.SALE)
             .order_by("-created_at")
             .first()
         )

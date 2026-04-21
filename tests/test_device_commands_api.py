@@ -22,10 +22,15 @@ def test_device_commands_pull_and_ack(admin_client, payment_factory, capture_pay
         unit=unit,
         tax_rate=tax,
         unit_price=Decimal("5.00"),
-        
         requires_preparation=True,
     )
-    receive_stock(org=org, product=product, initial_qty=Decimal("10.000"), unit_cost=Decimal("1.00"), label_code=f"LOT-{product.name.upper()}")
+    receive_stock(
+        org=org,
+        product=product,
+        initial_qty=Decimal("10.000"),
+        unit_cost=Decimal("1.00"),
+        label_code=f"LOT-{product.name.upper()}",
+    )
 
     order = Order.objects.create(org=org)
     OrderItem.objects.create(
@@ -76,9 +81,14 @@ def test_device_command_ack_failed_increments_retries(admin_client, payment_fact
         unit=unit,
         tax_rate=tax,
         unit_price=Decimal("5.00"),
-        
     )
-    receive_stock(org=org, product=product, initial_qty=Decimal("10.000"), unit_cost=Decimal("1.00"), label_code=f"LOT-{product.name.upper()}")
+    receive_stock(
+        org=org,
+        product=product,
+        initial_qty=Decimal("10.000"),
+        unit_cost=Decimal("1.00"),
+        label_code=f"LOT-{product.name.upper()}",
+    )
 
     order = Order.objects.create(org=org)
     OrderItem.objects.create(
@@ -128,7 +138,9 @@ def test_device_commands_pull_respects_limit(admin_client, payment_factory, capt
         unit_price=Decimal("5.00"),
         requires_preparation=True,
     )
-    receive_stock(org=org, product=product, initial_qty=Decimal("10.000"), unit_cost=Decimal("1.00"), label_code="LOT-BURGER")
+    receive_stock(
+        org=org, product=product, initial_qty=Decimal("10.000"), unit_cost=Decimal("1.00"), label_code="LOT-BURGER"
+    )
 
     order = Order.objects.create(org=org)
     OrderItem.objects.create(

@@ -31,15 +31,12 @@ def cancel_draft_order(*, order: Order, actor=None) -> Order:
 
         from apps.orders.models import OrderStatusEvent
 
-        
-
         OrderStatusEvent.objects.create(
             org=order.org,
             order=order,
             from_status=old_status,
             to_status=Order.STATUS_CANCELLED,
             actor=actor if actor is not None else None,
-      )
-
+        )
 
     return order

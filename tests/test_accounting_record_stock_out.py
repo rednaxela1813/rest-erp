@@ -15,6 +15,7 @@ pytestmark = pytest.mark.django_db
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_product(*, org, name="Котлета") -> Product:
     unit = Unit.objects.create(org=org, name=f"{name}-unit")
     tax_rate = TaxRate.objects.create(org=org, name=f"{name}-tax", rate=Decimal("20.00"))
@@ -30,6 +31,7 @@ def _make_product(*, org, name="Котлета") -> Product:
 # ---------------------------------------------------------------------------
 # Тесты
 # ---------------------------------------------------------------------------
+
 
 def test_deduct_stock_creates_stock_out_entry(org_factory):
     # При списании товара должна создаться запись STOCK_OUT
@@ -149,7 +151,10 @@ def test_stock_out_is_idempotent(org_factory):
     record_stock_out(movement=movements[0])
     record_stock_out(movement=movements[0])
 
-    assert AccountingEntry.objects.filter(
-        org=org,
-        entry_type=AccountingEntry.EntryType.STOCK_OUT,
-    ).count() == 1
+    assert (
+        AccountingEntry.objects.filter(
+            org=org,
+            entry_type=AccountingEntry.EntryType.STOCK_OUT,
+        ).count()
+        == 1
+    )

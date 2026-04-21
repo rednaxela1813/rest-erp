@@ -32,16 +32,30 @@ def test_pay_order_rolls_back_stock_if_error_occurs_midway(admin_client, monkeyp
     unit = Unit.objects.create(org=org, name="pcs")
     tax_rate = TaxRate.objects.create(org=org, name="VAT 20", rate=Decimal("0.20"))
 
-    receive_stock(org=org, product=product_a, initial_qty=Decimal("10.000"), unit_cost=Decimal("1.00"), label_code="LOT-A")
-    receive_stock(org=org, product=product_b, initial_qty=Decimal("10.000"), unit_cost=Decimal("1.00"), label_code="LOT-B")
+    receive_stock(
+        org=org, product=product_a, initial_qty=Decimal("10.000"), unit_cost=Decimal("1.00"), label_code="LOT-A"
+    )
+    receive_stock(
+        org=org, product=product_b, initial_qty=Decimal("10.000"), unit_cost=Decimal("1.00"), label_code="LOT-B"
+    )
 
     OrderItem.objects.create(
-        order=order, product=product_a, product_name=product_a.name,
-        qty=Decimal("2.000"), unit=unit, unit_price=Decimal("1.00"), tax_rate=tax_rate,
+        order=order,
+        product=product_a,
+        product_name=product_a.name,
+        qty=Decimal("2.000"),
+        unit=unit,
+        unit_price=Decimal("1.00"),
+        tax_rate=tax_rate,
     )
     OrderItem.objects.create(
-        order=order, product=product_b, product_name=product_b.name,
-        qty=Decimal("3.000"), unit=unit, unit_price=Decimal("1.00"), tax_rate=tax_rate,
+        order=order,
+        product=product_b,
+        product_name=product_b.name,
+        qty=Decimal("3.000"),
+        unit=unit,
+        unit_price=Decimal("1.00"),
+        tax_rate=tax_rate,
     )
 
     # ломаем второй вызов StockLot.save (первый lot сохранится, второй упадёт)

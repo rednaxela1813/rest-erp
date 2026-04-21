@@ -4,15 +4,14 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('payments', '0001_initial'),
+        ("payments", "0001_initial"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='orderpayment',
-            name='failure_reason',
-            field=models.TextField(blank=True, default='', max_length=255),
+            model_name="orderpayment",
+            name="failure_reason",
+            field=models.TextField(blank=True, default="", max_length=255),
         ),
     ]

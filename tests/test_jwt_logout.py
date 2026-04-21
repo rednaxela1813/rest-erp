@@ -34,3 +34,35 @@ def test_logout_blacklists_refresh_token(client):
         content_type="application/json",
     )
     assert refresh_resp.status_code in (401, 400)
+
+
+def test_logout_rejects_malformed_refresh_token(client):
+    User = get_user_model()
+    User.objects.create_user(email="a@example.com", password="pass12345")
+
+    login_resp = client.post(
+        reverse("jwt-login"),
+        data={"email": "a@example.com", "password": "pass12345"},
+        content_type="application/json",
+    )
+    access = login_resp.json()["access"]
+
+    logout_resp = client.post(
+        reverse("jwt-logout"),
+        data={"refresh": "not-a-jwt"},
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {access}",
+    )
+
+    assert logout_resp.status_code == 400
+    assert "detail" in logout_resp.json()
+
+
+def test_logout_requires_authentication(client):
+    logout_resp = client.post(
+        reverse("jwt-logout"),
+        data={"refresh": "not-a-jwt"},
+        content_type="application/json",
+    )
+
+    assert logout_resp.status_code == 401

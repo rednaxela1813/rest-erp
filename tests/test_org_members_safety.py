@@ -18,7 +18,7 @@ def test_cannot_delete_last_owner(owner_client):
 
     me.refresh_from_db()
     assert me.role == "owner"
-    
+
 
 def test_cannot_demote_last_owner(owner_client):
     client, owner, org = owner_client
@@ -36,8 +36,8 @@ def test_cannot_demote_last_owner(owner_client):
 
     me.refresh_from_db()
     assert me.role == "owner"
-    
-    
+
+
 def test_admin_cannot_change_owner_role(admin_client, user_factory, member_factory):
     client, admin, org = admin_client
 

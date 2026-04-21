@@ -8,6 +8,7 @@ Cashier views — тонкий HTTP-слой.
 
 Бизнес-логика, ORM-запросы и вычисления — в logic/.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -63,9 +64,11 @@ from .logic.payment_confirm import (
 from .logic.session import cash_drawer_total, get_active_session
 
 logger = structlog.get_logger(__name__)
+DEVICE_SIGNATURE_MAX_SKEW_SECONDS = 60
 
 
 # ── Utility ──────────────────────────────────────────────────────────────────
+
 
 def _parse_amount(raw_value: str) -> Decimal:
     try:
@@ -96,10 +99,10 @@ def _device_signature_ok(request: HttpRequest) -> bool:
     except (TypeError, ValueError):
         return False
 
-    if abs(int(time.time()) - timestamp_value) > 60:
+    if abs(int(time.time()) - timestamp_value) > DEVICE_SIGNATURE_MAX_SKEW_SECONDS:
         return False
 
-    payload = f"{timestamp}.{request.body.decode('utf-8')}".encode("utf-8")
+    payload = f"{timestamp}.{request.body.decode('utf-8')}".encode()
     expected_signature = hmac.new(
         key=token.encode("utf-8"),
         msg=payload,
@@ -117,6 +120,7 @@ def _device_auth_failed_response(request: HttpRequest) -> HttpResponse:
 
 
 # ── Auth ─────────────────────────────────────────────────────────────────────
+
 
 @ensure_csrf_cookie
 @require_http_methods(["GET", "POST"])
@@ -153,6 +157,7 @@ def cashier_logout(request: HttpRequest) -> HttpResponse:
 
 # ── Session open/close ───────────────────────────────────────────────────────
 
+
 @login_required
 @require_http_methods(["GET", "POST"])
 def session_open(request: HttpRequest) -> HttpResponse:
@@ -180,9 +185,7 @@ def session_open(request: HttpRequest) -> HttpResponse:
             opening_cash=str(opening_cash),
         )
 
-        org = Organization.objects.filter(
-            public_id=selected_org_id, members__user=request.user
-        ).first()
+        org = Organization.objects.filter(public_id=selected_org_id, members__user=request.user).first()
         terminal = None
         if org:
             if selected_terminal_id:
@@ -207,7 +210,9 @@ def session_open(request: HttpRequest) -> HttpResponse:
             error = "Select organization and terminal."
         else:
             existing = CashierSession.objects.filter(
-                org=org, terminal=terminal, status=CashierSession.STATUS_OPEN,
+                org=org,
+                terminal=terminal,
+                status=CashierSession.STATUS_OPEN,
             ).first()
             if existing:
                 if existing.cashier_id == request.user.id:
@@ -273,13 +278,17 @@ def session_close(request: HttpRequest) -> HttpResponse:
         request.session.pop(SESSION_CART, None)
         return redirect("cashier:login")
 
-    return render(request, "cashier/session_close.html", {
-        "session": session,
-        "org": session.org,
-        "report": report,
-        "cash_drawer_total": drawer_total,
-        "currency": settings.DEFAULT_CURRENCY,
-    })
+    return render(
+        request,
+        "cashier/session_close.html",
+        {
+            "session": session,
+            "org": session.org,
+            "report": report,
+            "cash_drawer_total": drawer_total,
+            "currency": settings.DEFAULT_CURRENCY,
+        },
+    )
 
 
 @login_required
@@ -304,6 +313,7 @@ def cash_in(request: HttpRequest) -> HttpResponse:
 
 # ── Main page ────────────────────────────────────────────────────────────────
 
+
 @login_required
 @require_http_methods(["GET"])
 def cashier_home(request: HttpRequest) -> HttpResponse:
@@ -318,48 +328,46 @@ def cashier_home(request: HttpRequest) -> HttpResponse:
     totals = cart_totals(items)
 
     draft_orders = (
-        Order.objects
-        .filter(org=org, status=Order.STATUS_DRAFT)
+        Order.objects.filter(org=org, status=Order.STATUS_DRAFT)
         .annotate(items_count=Count("items"))
         .filter(items_count__gt=0)
         .order_by("-created_at")[:10]
     )
-    paid_orders = (
-        Order.objects
-        .filter(org=org, status=Order.STATUS_PAID)
-        .order_by("-created_at")[:10]
-    )
+    paid_orders = Order.objects.filter(org=org, status=Order.STATUS_PAID).order_by("-created_at")[:10]
     drawer_total = cash_drawer_total(session)
     todays_sales_total = (
-        OrderPayment.objects
-        .filter(
+        OrderPayment.objects.filter(
             org=org,
             terminal=session.terminal,
             status=OrderPayment.Status.CAPTURED,
             tender__in=[OrderPayment.Tender.CASH, OrderPayment.Tender.CARD],
             captured_at__gte=session.opened_at,
-        )
-        .aggregate(total=Coalesce(Sum("amount"), Value(Decimal("0.00"))))["total"]
+        ).aggregate(total=Coalesce(Sum("amount"), Value(Decimal("0.00"))))["total"]
     ).quantize(Decimal("0.01"))
 
-    return render(request, "cashier/index.html", {
-        "org": org,
-        "session": session,
-        "products": products,
-        "cart_items": items,
-        "cart_count": sum(cart.values()) if cart else 0,
-        "totals": totals,
-        "currency": settings.DEFAULT_CURRENCY,
-        "draft_orders": draft_orders,
-        "paid_orders": paid_orders,
-        "cash_drawer_total": drawer_total,
-        "todays_sales_total": todays_sales_total,
-        "cart_error": request.session.pop(SESSION_CHECKOUT_ERROR, ""),
-        "refund_error": request.session.pop(SESSION_REFUND_ERROR, ""),
-    })
+    return render(
+        request,
+        "cashier/index.html",
+        {
+            "org": org,
+            "session": session,
+            "products": products,
+            "cart_items": items,
+            "cart_count": sum(cart.values()) if cart else 0,
+            "totals": totals,
+            "currency": settings.DEFAULT_CURRENCY,
+            "draft_orders": draft_orders,
+            "paid_orders": paid_orders,
+            "cash_drawer_total": drawer_total,
+            "todays_sales_total": todays_sales_total,
+            "cart_error": request.session.pop(SESSION_CHECKOUT_ERROR, ""),
+            "refund_error": request.session.pop(SESSION_REFUND_ERROR, ""),
+        },
+    )
 
 
 # ── Product catalog ──────────────────────────────────────────────────────────
+
 
 @login_required
 @require_http_methods(["GET"])
@@ -369,15 +377,20 @@ def product_list(request: HttpRequest) -> HttpResponse:
         return redirect("cashier:session_open")
 
     query = request.GET.get("q", "").strip()
-    return render(request, "cashier/partials/product_list.html", {
-        "org": session.org,
-        "products": get_products(session.org, query=query),
-        "query": query,
-        "currency": settings.DEFAULT_CURRENCY,
-    })
+    return render(
+        request,
+        "cashier/partials/product_list.html",
+        {
+            "org": session.org,
+            "products": get_products(session.org, query=query),
+            "query": query,
+            "currency": settings.DEFAULT_CURRENCY,
+        },
+    )
 
 
 # ── Cart ─────────────────────────────────────────────────────────────────────
+
 
 @login_required
 @require_http_methods(["GET"])
@@ -408,8 +421,11 @@ def cart_add(request: HttpRequest, product_id: int) -> HttpResponse:
         reset_checkout_idempotency(request.session)
         request.session.modified = True
 
-    return render(request, "cashier/partials/cart.html",
-                  build_cart_context(cart, session.org, last_added=product, cart_error=error))
+    return render(
+        request,
+        "cashier/partials/cart.html",
+        build_cart_context(cart, session.org, last_added=product, cart_error=error),
+    )
 
 
 @login_required
@@ -436,8 +452,7 @@ def cart_add_barcode(request: HttpRequest) -> HttpResponse:
         reset_checkout_idempotency(request.session)
         request.session.modified = True
 
-    return render(request, "cashier/partials/cart.html",
-                  build_cart_context(cart, session.org, cart_error=error))
+    return render(request, "cashier/partials/cart.html", build_cart_context(cart, session.org, cart_error=error))
 
 
 @login_required
@@ -474,13 +489,17 @@ def cart_clear(request: HttpRequest) -> HttpResponse:
     reset_checkout_idempotency(request.session)
     request.session.modified = True
 
-    return render(request, "cashier/partials/cart.html", {
-        "org": session.org,
-        "cart_items": [],
-        "cart_count": 0,
-        "totals": {"subtotal": Decimal("0.00"), "total": Decimal("0.00")},
-        "currency": settings.DEFAULT_CURRENCY,
-    })
+    return render(
+        request,
+        "cashier/partials/cart.html",
+        {
+            "org": session.org,
+            "cart_items": [],
+            "cart_count": 0,
+            "totals": {"subtotal": Decimal("0.00"), "total": Decimal("0.00")},
+            "currency": settings.DEFAULT_CURRENCY,
+        },
+    )
 
 
 @login_required
@@ -495,11 +514,11 @@ def cart_restore(request: HttpRequest) -> HttpResponse:
     reset_checkout_idempotency(request.session)
     request.session.modified = True
 
-    return render(request, "cashier/partials/cart.html",
-                  build_cart_context(cart, session.org, cart_error=""))
+    return render(request, "cashier/partials/cart.html", build_cart_context(cart, session.org, cart_error=""))
 
 
 # ── Kitchen ──────────────────────────────────────────────────────────────────
+
 
 @login_required
 @require_http_methods(["GET"])
@@ -508,9 +527,15 @@ def kitchen_board(request: HttpRequest) -> HttpResponse:
     if isinstance(session, HttpResponse):
         return session
 
-    return render(request, "cashier/kitchen.html", {
-        "org": session.org, "session": session, **kitchen_context(session.org),
-    })
+    return render(
+        request,
+        "cashier/kitchen.html",
+        {
+            "org": session.org,
+            "session": session,
+            **kitchen_context(session.org),
+        },
+    )
 
 
 @login_required
@@ -532,8 +557,7 @@ def kitchen_claim_next(request: HttpRequest) -> HttpResponse:
 
     with transaction.atomic():
         ticket = (
-            KitchenTicket.objects
-            .select_for_update()
+            KitchenTicket.objects.select_for_update()
             .filter(org=session.org, status=KitchenTicket.Status.PENDING)
             .order_by("created_at", "id")
             .first()
@@ -565,6 +589,7 @@ def kitchen_update(request: HttpRequest, public_id) -> HttpResponse:
 
 
 # ── Checkout ─────────────────────────────────────────────────────────────────
+
 
 @login_required
 @require_http_methods(["POST"])
@@ -600,9 +625,7 @@ def checkout(request: HttpRequest) -> HttpResponse:
 
     idempotency_key = idem_map.get(fingerprint)
     if idempotency_key:
-        existing = OrderPayment.objects.filter(
-            org=session.org, idempotency_key=idempotency_key
-        ).first()
+        existing = OrderPayment.objects.filter(org=session.org, idempotency_key=idempotency_key).first()
         if existing:
             return redirect("cashier:payment_wait", public_id=existing.public_id)
     else:
@@ -619,19 +642,18 @@ def checkout(request: HttpRequest) -> HttpResponse:
             session_id=str(session.public_id),
             user_id=str(request.user.id),
         )
-        request.session[SESSION_CHECKOUT_ERROR] = (
-            "Cannot checkout: one or more products are missing unit or tax rate."
-        )
+        request.session[SESSION_CHECKOUT_ERROR] = "Cannot checkout: one or more products are missing unit or tax rate."
         return redirect("cashier:home")
 
     try:
         payment = create_payment(
-            order=order, session=session, tender=tender, idempotency_key=idempotency_key,
+            order=order,
+            session=session,
+            tender=tender,
+            idempotency_key=idempotency_key,
         )
     except IntegrityError:
-        existing = OrderPayment.objects.filter(
-            org=session.org, idempotency_key=idempotency_key
-        ).first()
+        existing = OrderPayment.objects.filter(org=session.org, idempotency_key=idempotency_key).first()
         if existing:
             return redirect("cashier:payment_wait", public_id=existing.public_id)
         raise
@@ -656,6 +678,7 @@ def checkout(request: HttpRequest) -> HttpResponse:
 
 # ── Payment pages ─────────────────────────────────────────────────────────────
 
+
 @login_required
 @require_http_methods(["GET"])
 def payment_wait(request: HttpRequest, public_id) -> HttpResponse:
@@ -664,15 +687,19 @@ def payment_wait(request: HttpRequest, public_id) -> HttpResponse:
         return session
 
     payment = get_object_or_404(OrderPayment, org=session.org, public_id=public_id)
-    return render(request, "cashier/payment_wait.html", {
-        "org": session.org,
-        "session": session,
-        "payment": payment,
-        "order": payment.order,
-        "currency": settings.DEFAULT_CURRENCY,
-        "debug": settings.DEBUG,
-        "ekasa_enabled": settings.EKASA_ENABLED,
-    })
+    return render(
+        request,
+        "cashier/payment_wait.html",
+        {
+            "org": session.org,
+            "session": session,
+            "payment": payment,
+            "order": payment.order,
+            "currency": settings.DEFAULT_CURRENCY,
+            "debug": settings.DEBUG,
+            "ekasa_enabled": settings.EKASA_ENABLED,
+        },
+    )
 
 
 @login_required
@@ -689,6 +716,7 @@ def payment_status(request: HttpRequest, public_id) -> HttpResponse:
         and payment.status == OrderPayment.Status.CAPTURED
         and payment.fiscal_status == OrderPayment.FiscalStatus.PENDING
     ):
+        recreated_missing_command = False
         fiscal_types = [
             DeviceCommand.Type.FISCALIZE_SALE,
             DeviceCommand.Type.FISCALIZE_REFUND,
@@ -697,25 +725,27 @@ def payment_status(request: HttpRequest, public_id) -> HttpResponse:
         if not DeviceCommand.objects.filter(payment=payment, command_type__in=fiscal_types).exists():
             include_kot = payment.order.kitchen_tickets.exists()
             enqueue_payment_commands(payment=payment, include_kot=include_kot, include_payment_capture=False)
+            recreated_missing_command = True
 
-        from apps.payments.tasks import process_device_commands_ekasa
-        try:
-            process_device_commands_ekasa.run(org_id=session.org_id, limit=50)
-        except Exception as exc:
-            logger.exception(
-                "cashier_payment_status_inline_fiscal_failed",
-                org_id=str(session.org.public_id),
-                payment_id=str(payment.public_id),
-                error=str(exc),
-            )
-            payment.fiscal_status = OrderPayment.FiscalStatus.FAILED
-            payment.failure_reason = str(exc)
-            payment.save(update_fields=["fiscal_status", "failure_reason", "updated_at"])
+        if not recreated_missing_command:
+            from apps.payments.tasks import process_device_commands_ekasa
+
+            try:
+                process_device_commands_ekasa.run(org_id=session.org_id, limit=50)
+            except Exception as exc:
+                logger.exception(
+                    "cashier_payment_status_inline_fiscal_failed",
+                    org_id=str(session.org.public_id),
+                    payment_id=str(payment.public_id),
+                    error=str(exc),
+                )
+                payment.fiscal_status = OrderPayment.FiscalStatus.FAILED
+                payment.failure_reason = str(exc)
+                payment.save(update_fields=["fiscal_status", "failure_reason", "updated_at"])
         payment.refresh_from_db()
 
     failed_fiscal_command = (
-        DeviceCommand.objects
-        .filter(
+        DeviceCommand.objects.filter(
             payment=payment,
             command_type__in=[
                 DeviceCommand.Type.FISCALIZE_SALE,
@@ -727,18 +757,22 @@ def payment_status(request: HttpRequest, public_id) -> HttpResponse:
         .order_by("-updated_at", "-created_at")
         .first()
     )
-    return render(request, "cashier/partials/payment_status.html", {
-        "payment": payment,
-        "order": payment.order,
-        "currency": settings.DEFAULT_CURRENCY,
-        "ekasa_enabled": settings.EKASA_ENABLED,
-        "fiscal_last_error": failed_fiscal_command.last_error if failed_fiscal_command else "",
-        "can_retry_fiscal": (
-            settings.EKASA_ENABLED
-            and payment.status == OrderPayment.Status.CAPTURED
-            and failed_fiscal_command is not None
-        ),
-    })
+    return render(
+        request,
+        "cashier/partials/payment_status.html",
+        {
+            "payment": payment,
+            "order": payment.order,
+            "currency": settings.DEFAULT_CURRENCY,
+            "ekasa_enabled": settings.EKASA_ENABLED,
+            "fiscal_last_error": failed_fiscal_command.last_error if failed_fiscal_command else "",
+            "can_retry_fiscal": (
+                settings.EKASA_ENABLED
+                and payment.status == OrderPayment.Status.CAPTURED
+                and failed_fiscal_command is not None
+            ),
+        },
+    )
 
 
 @login_required
@@ -759,8 +793,7 @@ def payment_retry_fiscal(request: HttpRequest, public_id) -> HttpResponse:
     )
 
     sale_command = (
-        DeviceCommand.objects
-        .filter(payment=payment, command_type=DeviceCommand.Type.FISCALIZE_SALE)
+        DeviceCommand.objects.filter(payment=payment, command_type=DeviceCommand.Type.FISCALIZE_SALE)
         .order_by("-created_at")
         .first()
     )
@@ -768,8 +801,7 @@ def payment_retry_fiscal(request: HttpRequest, public_id) -> HttpResponse:
         include_kot = payment.order.kitchen_tickets.exists()
         enqueue_payment_commands(payment=payment, include_kot=include_kot, include_payment_capture=False)
         sale_command = (
-            DeviceCommand.objects
-            .filter(payment=payment, command_type=DeviceCommand.Type.FISCALIZE_SALE)
+            DeviceCommand.objects.filter(payment=payment, command_type=DeviceCommand.Type.FISCALIZE_SALE)
             .order_by("-created_at")
             .first()
         )
@@ -787,9 +819,7 @@ def payment_retry_fiscal(request: HttpRequest, public_id) -> HttpResponse:
         sale_command.retries = 0
         sale_command.last_error = ""
         sale_command.next_attempt_at = None
-        sale_command.save(
-            update_fields=["payload", "status", "retries", "last_error", "next_attempt_at", "updated_at"]
-        )
+        sale_command.save(update_fields=["payload", "status", "retries", "last_error", "next_attempt_at", "updated_at"])
 
     payment.fiscal_status = OrderPayment.FiscalStatus.PENDING
     payment.failure_reason = ""
@@ -830,6 +860,7 @@ def payment_confirm_card(request: HttpRequest, public_id) -> HttpResponse:
 
 # ── Draft orders ─────────────────────────────────────────────────────────────
 
+
 @login_required
 @require_http_methods(["POST"])
 def draft_pay(request: HttpRequest, public_id, tender: str) -> HttpResponse:
@@ -854,12 +885,13 @@ def draft_pay(request: HttpRequest, public_id, tender: str) -> HttpResponse:
 
     try:
         payment = create_payment(
-            order=order, session=session, tender=tender, idempotency_key=idempotency_key,
+            order=order,
+            session=session,
+            tender=tender,
+            idempotency_key=idempotency_key,
         )
     except IntegrityError:
-        existing = OrderPayment.objects.filter(
-            org=session.org, idempotency_key=idempotency_key
-        ).first()
+        existing = OrderPayment.objects.filter(org=session.org, idempotency_key=idempotency_key).first()
         if existing:
             return redirect("cashier:payment_wait", public_id=existing.public_id)
         raise
@@ -877,6 +909,7 @@ def draft_cancel(request: HttpRequest, public_id) -> HttpResponse:
     order = get_object_or_404(Order, org=session.org, public_id=public_id)
     try:
         from apps.orders.logic.cancel_draft_order import cancel_draft_order
+
         cancel_draft_order(order=order, actor=request.user)
     except ValidationError:
         pass
@@ -884,6 +917,7 @@ def draft_cancel(request: HttpRequest, public_id) -> HttpResponse:
 
 
 # ── Order refund ──────────────────────────────────────────────────────────────
+
 
 @login_required
 @require_http_methods(["POST"])
@@ -901,6 +935,7 @@ def order_refund(request: HttpRequest, public_id) -> HttpResponse:
     )
 
     from apps.orders.logic.refund_order import refund_paid_order
+
     try:
         refund_paid_order(order=order, actor=request.user)
 
@@ -934,6 +969,7 @@ def order_refund(request: HttpRequest, public_id) -> HttpResponse:
 
 # ── Device endpoints (called by physical hardware) ───────────────────────────
 
+
 @csrf_exempt
 @require_http_methods(["POST"])
 def device_cash_confirm(request: HttpRequest, public_id) -> HttpResponse:
@@ -942,8 +978,7 @@ def device_cash_confirm(request: HttpRequest, public_id) -> HttpResponse:
 
     payment = get_object_or_404(OrderPayment, public_id=public_id)
     session = (
-        CashierSession.objects
-        .select_related("org", "terminal")
+        CashierSession.objects.select_related("org", "terminal")
         .filter(org=payment.org, status=CashierSession.STATUS_OPEN)
         .first()
     )
@@ -963,8 +998,7 @@ def device_card_confirm(request: HttpRequest, public_id) -> HttpResponse:
 
     payment = get_object_or_404(OrderPayment, public_id=public_id)
     session = (
-        CashierSession.objects
-        .select_related("org", "terminal")
+        CashierSession.objects.select_related("org", "terminal")
         .filter(org=payment.org, status=CashierSession.STATUS_OPEN)
         .first()
     )

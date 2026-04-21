@@ -18,9 +18,7 @@ def record_stock_return(*, movement: StockMovement) -> AccountingEntry:
     """
     ct = ContentType.objects.get_for_model(StockMovement)
 
-    cost = (movement.quantity * movement.unit_cost_snapshot).quantize(
-        Decimal("0.01")
-    )
+    cost = (movement.quantity * movement.unit_cost_snapshot).quantize(Decimal("0.01"))
 
     entry, _ = AccountingEntry.objects.get_or_create(
         org=movement.org,

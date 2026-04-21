@@ -1,4 +1,4 @@
-#apps/products/models.py
+# apps/products/models.py
 import uuid
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
@@ -9,9 +9,27 @@ from config.orgs.models import OrgScopedModel
 from decimal import Decimal
 
 
+ALLOWED_PRODUCT_IMAGE_SUFFIXES = {"jpg", "jpeg", "png", "gif", "webp"}
+ALLOWED_PRODUCT_IMAGE_CONTENT_TYPES = {
+    "image/jpeg",
+    "image/png",
+    "image/gif",
+    "image/webp",
+}
+MAX_PRODUCT_IMAGE_BYTES = 5 * 1024 * 1024
+
+
 def product_image_upload_to(instance, filename: str) -> str:
     suffix = filename.rsplit(".", 1)[-1].lower() if "." in filename else "bin"
+    if suffix not in ALLOWED_PRODUCT_IMAGE_SUFFIXES:
+        suffix = "bin"
     return f"products/{instance.org_id}/{uuid.uuid4()}.{suffix}"
+
+
+def _image_suffix(filename: str) -> str:
+    if "." not in filename:
+        return "bin"
+    return filename.rsplit(".", 1)[-1].lower()
 
 
 class Unit(OrgScopedModel):
@@ -28,18 +46,15 @@ class Unit(OrgScopedModel):
     class Meta:
         ordering = ["id"]
         constraints = [
-    models.UniqueConstraint(
-        fields=["org", "name"],
-        condition=models.Q(status="active"),
-        name="uniq_active_unit_name_per_org",
-    ),
-]
-
+            models.UniqueConstraint(
+                fields=["org", "name"],
+                condition=models.Q(status="active"),
+                name="uniq_active_unit_name_per_org",
+            ),
+        ]
 
     def __str__(self) -> str:
         return self.name
-
-
 
 
 class TaxRate(OrgScopedModel):
@@ -75,15 +90,15 @@ class Product(OrgScopedModel):
         (STATUS_ACTIVE, "Active"),
         (STATUS_ARCHIVED, "Archived"),
     )
-    
-    PRODUCT_TYPE_SIMPLE     = "simple"
+
+    PRODUCT_TYPE_SIMPLE = "simple"
     PRODUCT_TYPE_INGREDIENT = "ingredient"
-    PRODUCT_TYPE_PREPARED   = "prepared"
+    PRODUCT_TYPE_PREPARED = "prepared"
 
     PRODUCT_TYPE_CHOICES = (
-        (PRODUCT_TYPE_SIMPLE,     "Simple"),
+        (PRODUCT_TYPE_SIMPLE, "Simple"),
         (PRODUCT_TYPE_INGREDIENT, "Ingredient"),
-        (PRODUCT_TYPE_PREPARED,   "Prepared"),
+        (PRODUCT_TYPE_PREPARED, "Prepared"),
     )
 
     name = models.CharField(max_length=255)
@@ -100,13 +115,14 @@ class Product(OrgScopedModel):
         default=Decimal("0.00"),
         validators=[MinValueValidator(Decimal("0.00")), MaxValueValidator(Decimal("100.00"))],
     )
-    
-    unit = models.ForeignKey("products.Unit",
-       on_delete=models.PROTECT,
-       related_name="products",
-       null=True,
-       blank=True,
-   )
+
+    unit = models.ForeignKey(
+        "products.Unit",
+        on_delete=models.PROTECT,
+        related_name="products",
+        null=True,
+        blank=True,
+    )
     tax_rate = models.ForeignKey(
         "products.TaxRate",
         on_delete=models.PROTECT,
@@ -115,19 +131,7 @@ class Product(OrgScopedModel):
         blank=True,
     )
     unit_price = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
-    # stock_qty = models.DecimalField(
-    #     max_digits=12,
-    #     decimal_places=3,
-    #     null=True,
-    #     blank=True,
-    # )
-    
-   # food_cost_percent = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Целевой food cost в процентах, например 30.00") TODO: Product
-    #- добавить food_cost_percent (DecimalField, на уровне карточки)
-#- добавить price_rounding_step (DecimalField, на уровне карточки)  
-#- unit_price становится вычисляемым (пересчитывается при новой поставке)
-#- аналитика food cost по ресторану в целом — отдельная задача#
-   # price_rounding_step = models.DecimalField(max_digits=4, decimal_places=2, null=True, blank=True, help_text="Шаг округления цены, например 0.10 или 0.20")
+
     class Meta:
         ordering = ["id"]
         constraints = [
@@ -157,9 +161,16 @@ class Product(OrgScopedModel):
         if self.unit and self.unit.org_id != self.org_id:
             raise ValidationError({"unit": "Unit must belong to the same organization as the product."})
         if self.tax_rate and self.tax_rate.org_id != self.org_id:
-            raise ValidationError(
-                {"tax_rate": "Tax rate must belong to the same organization as the product."}
-            )
+            raise ValidationError({"tax_rate": "Tax rate must belong to the same organization as the product."})
+        if self.image:
+            if self.image.size > MAX_PRODUCT_IMAGE_BYTES:
+                raise ValidationError({"image": "Image must be 5 MB or smaller."})
+            suffix = _image_suffix(self.image.name)
+            if suffix not in ALLOWED_PRODUCT_IMAGE_SUFFIXES:
+                raise ValidationError({"image": "Unsupported image type."})
+            content_type = getattr(self.image, "content_type", "")
+            if content_type and content_type not in ALLOWED_PRODUCT_IMAGE_CONTENT_TYPES:
+                raise ValidationError({"image": "Unsupported image type."})
 
     @property
     def stock_qty(self):
@@ -175,7 +186,7 @@ class Product(OrgScopedModel):
         for item in self.bundle_items.select_related("component").all():
             if not item.component:
                 continue
-            total += (item.component.unit_price * item.qty)
+            total += item.component.unit_price * item.qty
         discount = total * (self.bundle_discount_percent / Decimal("100"))
         price = (total - discount).quantize(Decimal("0.01"))
         return price
@@ -214,8 +225,6 @@ class ProductVariant(models.Model):
         (STATUS_ACTIVE, "Active"),
         (STATUS_ARCHIVED, "Archived"),
     )
-    
-    
 
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="variants")
     name = models.CharField(max_length=64)
@@ -246,8 +255,8 @@ class ProductVariant(models.Model):
 
     def __str__(self) -> str:
         return f"{self.product.name} - {self.name}"
-    
-    
+
+
 # ProductAddon (name, price, status, product FK)
 class ProductAddon(models.Model):
     public_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)

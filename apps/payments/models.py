@@ -167,6 +167,7 @@ class FiscalReceipt(models.Model):
     Internal record of fiscal document issuance (sale/refund/storno/cash in/out).
     Stores device payload for audit and future adapter integration.
     """
+
     class Type(models.TextChoices):
         SALE = "sale", "Sale"
         REFUND = "refund", "Refund"
@@ -326,12 +327,8 @@ class CashierSession(OrgScopedModel):
     opened_at = models.DateTimeField(auto_now_add=True)
     closed_at = models.DateTimeField(null=True, blank=True)
 
-    cash_drawer_start = models.DecimalField(
-        max_digits=12, decimal_places=2, default=Decimal("0.00")
-    )
-    cash_drawer_end = models.DecimalField(
-        max_digits=12, decimal_places=2, null=True, blank=True
-    )
+    cash_drawer_start = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    cash_drawer_end = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
 
     class Meta:
         constraints = [

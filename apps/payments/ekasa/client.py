@@ -51,7 +51,7 @@ class EkasaClient:
         username = settings.EKASA_USERNAME
         password = settings.EKASA_PASSWORD
         if username and password:
-            token = base64.b64encode(f"{username}:{password}".encode("utf-8")).decode("ascii")
+            token = base64.b64encode(f"{username}:{password}".encode()).decode("ascii")
             headers["Authorization"] = f"Basic {token}"
 
         request = urllib.request.Request(url=url, data=body, headers=headers, method="POST")

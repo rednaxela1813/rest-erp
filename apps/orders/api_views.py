@@ -37,14 +37,11 @@ class OrderListCreateApi(generics.ListCreateAPIView):
 
     def get_queryset(self):
         org = get_request_org(self.request)
-        return Order.objects.filter(org=org).order_by("id")
+        return Order.objects.for_org(org).order_by("id")
 
     def perform_create(self, serializer):
         org = get_request_org(self.request)
         serializer.save(org=org)
-
-
-
 
 
 class OrderItemListCreateApi(generics.ListCreateAPIView):
@@ -52,7 +49,7 @@ class OrderItemListCreateApi(generics.ListCreateAPIView):
 
     def get_order(self):
         org = get_request_org(self.request)
-        return get_object_or_404(Order, org=org, public_id=self.kwargs["order_public_id"])
+        return get_object_or_404(Order.objects.for_org(org), public_id=self.kwargs["order_public_id"])
 
     def get_queryset(self):
         order = self.get_order()
@@ -88,9 +85,7 @@ class OrderDetailApi(generics.RetrieveUpdateAPIView):
 
     def get_queryset(self):
         org = get_request_org(self.request)
-        return Order.objects.filter(org=org)
-    
-    
+        return Order.objects.for_org(org)
 
     def perform_update(self, serializer):
         order = self.get_object()
@@ -109,9 +104,7 @@ class OrderDetailApi(generics.RetrieveUpdateAPIView):
                 old_status=old_status,
                 new_status=new_status,
             )
-            raise ValidationError(
-                {"status": ["Direct order payment is blocked. Use payment capture endpoint."]}
-            )
+            raise ValidationError({"status": ["Direct order payment is blocked. Use payment capture endpoint."]})
 
         if new_status == Order.STATUS_CANCELLED:
             if old_status == Order.STATUS_DRAFT:
@@ -125,6 +118,7 @@ class OrderDetailApi(generics.RetrieveUpdateAPIView):
 
         serializer.save()
 
+
 class OrderStatusEventListApi(generics.ListAPIView):
     permission_classes = [IsAuthenticated, IsOrgMemberReadOnlyOrOrgAdmin]
     serializer_class = OrderStatusEventSerializer
@@ -134,11 +128,10 @@ class OrderStatusEventListApi(generics.ListAPIView):
         order_public_id = self.kwargs["public_id"]
 
         # гарантируем org-scope через Order
-        order = get_object_or_404(Order, org=org, public_id=order_public_id)
+        order = get_object_or_404(Order.objects.for_org(org), public_id=order_public_id)
 
         return (
-            OrderStatusEvent.objects
-            .filter(org=org, order=order)
+            OrderStatusEvent.objects.filter(org=org, order=order)
             .select_related("actor", "order")
             .order_by("-created_at", "-id")
         )
@@ -158,7 +151,7 @@ class OrderRefundApi(APIView):
 
     def post(self, request, public_id):
         org = get_request_org(request)
-        order = get_object_or_404(Order, org=org, public_id=public_id)
+        order = get_object_or_404(Order.objects.for_org(org), public_id=public_id)
         logger.info(
             "order_refund_api_requested",
             org_id=str(org.public_id),
@@ -193,7 +186,7 @@ class OrderStornoApi(APIView):
 
     def post(self, request, public_id):
         org = get_request_org(request)
-        order = get_object_or_404(Order, org=org, public_id=public_id)
+        order = get_object_or_404(Order.objects.for_org(org), public_id=public_id)
         logger.info(
             "order_storno_api_requested",
             org_id=str(org.public_id),
@@ -220,12 +213,7 @@ class KitchenTicketListApi(generics.ListAPIView):
 
     def get_queryset(self):
         org = get_request_org(self.request)
-        qs = (
-            KitchenTicket.objects
-            .filter(org=org)
-            .select_related("order", "product")
-            .order_by("created_at", "id")
-        )
+        qs = KitchenTicket.objects.for_org(org).select_related("order", "product").order_by("created_at", "id")
         status_param = self.request.query_params.get("status")
         if status_param:
             statuses = [s.strip() for s in status_param.split(",") if s.strip()]
@@ -242,7 +230,7 @@ class KitchenTicketUpdateApi(generics.RetrieveUpdateAPIView):
 
     def get_queryset(self):
         org = get_request_org(self.request)
-        return KitchenTicket.objects.filter(org=org).select_related("order", "product")
+        return KitchenTicket.objects.for_org(org).select_related("order", "product")
 
     def get_serializer_class(self):
         if self.request.method in ("PATCH", "PUT"):
@@ -257,9 +245,9 @@ class KitchenTicketClaimNextApi(APIView):
         org = get_request_org(request)
         with transaction.atomic():
             ticket = (
-                KitchenTicket.objects
-                .select_for_update()
-                .filter(org=org, status=KitchenTicket.Status.PENDING)
+                KitchenTicket.objects.select_for_update()
+                .for_org(org)
+                .filter(status=KitchenTicket.Status.PENDING)
                 .order_by("created_at", "id")
                 .select_related("order", "product")
                 .first()
@@ -290,9 +278,9 @@ class KitchenTicketClaimNextWithQueueApi(APIView):
         claimed = None
         with transaction.atomic():
             claimed = (
-                KitchenTicket.objects
-                .select_for_update()
-                .filter(org=org, status=KitchenTicket.Status.PENDING)
+                KitchenTicket.objects.select_for_update()
+                .for_org(org)
+                .filter(status=KitchenTicket.Status.PENDING)
                 .order_by("created_at", "id")
                 .select_related("order", "product")
                 .first()
@@ -302,14 +290,14 @@ class KitchenTicketClaimNextWithQueueApi(APIView):
                 claimed.save(update_fields=["status", "updated_at"])
 
         pending = (
-            KitchenTicket.objects
-            .filter(org=org, status=KitchenTicket.Status.PENDING)
+            KitchenTicket.objects.for_org(org)
+            .filter(status=KitchenTicket.Status.PENDING)
             .select_related("order", "product")
             .order_by("created_at", "id")
         )
         in_progress = (
-            KitchenTicket.objects
-            .filter(org=org, status=KitchenTicket.Status.IN_PROGRESS)
+            KitchenTicket.objects.for_org(org)
+            .filter(status=KitchenTicket.Status.IN_PROGRESS)
             .select_related("order", "product")
             .order_by("created_at", "id")
         )

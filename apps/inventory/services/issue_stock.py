@@ -34,11 +34,7 @@ def issue_by_scanned_lot(
     )
     with transaction.atomic():
         try:
-            lot = (
-                StockLot.objects
-                .select_for_update()
-                .get(org=org, label_code=label_code)
-            )
+            lot = StockLot.objects.select_for_update().get(org=org, label_code=label_code)
         except StockLot.DoesNotExist:
             logger.warning(
                 "stock_issue_scanned_lot_not_found",
@@ -46,9 +42,7 @@ def issue_by_scanned_lot(
                 label_code=label_code,
                 quantity=str(quantity),
             )
-            raise LotNotFound(
-                f"Партия с label_code='{label_code}' не найдена."
-            )
+            raise LotNotFound(f"Партия с label_code='{label_code}' не найдена.")
 
         if lot.status != StockLot.Status.ACTIVE:
             logger.warning(
@@ -58,9 +52,7 @@ def issue_by_scanned_lot(
                 lot_status=lot.status,
                 quantity=str(quantity),
             )
-            raise LotNotAvailable(
-                f"Партия '{label_code}' недоступна для списания: статус '{lot.status}'."
-            )
+            raise LotNotAvailable(f"Партия '{label_code}' недоступна для списания: статус '{lot.status}'.")
 
         if quantity > lot.remaining_qty:
             logger.warning(
@@ -70,9 +62,7 @@ def issue_by_scanned_lot(
                 requested_qty=str(quantity),
                 remaining_qty=str(lot.remaining_qty),
             )
-            raise InsufficientStock(
-                f"Запрошено {quantity}, остаток в партии '{label_code}': {lot.remaining_qty}."
-            )
+            raise InsufficientStock(f"Запрошено {quantity}, остаток в партии '{label_code}': {lot.remaining_qty}.")
 
         lot.remaining_qty -= quantity
 

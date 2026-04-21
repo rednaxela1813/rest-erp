@@ -46,8 +46,7 @@ def pull_device_commands(*, org, limit: int = 50, command_types: list[str] | Non
         now = timezone.now()
         # Lock only the rows we are going to take, and skip rows locked by other agents.
         commands_qs = (
-            DeviceCommand.objects
-            .select_for_update(skip_locked=True)
+            DeviceCommand.objects.select_for_update(skip_locked=True)
             .filter(
                 org=org,
                 status=DeviceCommand.Status.PENDING,
@@ -65,9 +64,7 @@ def pull_device_commands(*, org, limit: int = 50, command_types: list[str] | Non
 
         # Mark commands as SENT so other agents don't pick them up.
         if commands:
-            DeviceCommand.objects.filter(id__in=[cmd.id for cmd in commands]).update(
-                status=DeviceCommand.Status.SENT
-            )
+            DeviceCommand.objects.filter(id__in=[cmd.id for cmd in commands]).update(status=DeviceCommand.Status.SENT)
             for cmd in commands:
                 cmd.status = DeviceCommand.Status.SENT
 
@@ -118,12 +115,9 @@ def release_due_device_commands(*, org) -> int:
     This also recovers commands stuck in SENT after an agent/request crash.
     """
     now = timezone.now()
-    stale_sent_before = now - timedelta(
-        seconds=getattr(settings, "DEVICE_COMMANDS_RETRY_BASE_SECONDS", 10)
-    )
+    stale_sent_before = now - timedelta(seconds=getattr(settings, "DEVICE_COMMANDS_RETRY_BASE_SECONDS", 10))
     released = (
-        DeviceCommand.objects
-        .filter(
+        DeviceCommand.objects.filter(
             org=org,
             retries__lt=models.F("max_retries"),
         )

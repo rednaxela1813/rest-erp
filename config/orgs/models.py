@@ -1,7 +1,16 @@
-#config/orgs/models.py
+# config/orgs/models.py
 
 import uuid
 from django.db import models
+
+
+class OrgScopedQuerySet(models.QuerySet):
+    def for_org(self, org):
+        return self.filter(org=org)
+
+
+class OrgScopedManager(models.Manager.from_queryset(OrgScopedQuerySet)):
+    pass
 
 
 class OrgScopedModel(models.Model):
@@ -9,10 +18,12 @@ class OrgScopedModel(models.Model):
     org = models.ForeignKey("orgs.Organization", on_delete=models.CASCADE, related_name="%(class)ss")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    objects = OrgScopedManager()
 
     class Meta:
         abstract = True
-        
+
+
 class OrgNote(OrgScopedModel):
     title = models.CharField(max_length=255)
 
@@ -21,7 +32,6 @@ class OrgNote(OrgScopedModel):
 
     def __str__(self) -> str:
         return self.title
-
 
 
 class Organization(models.Model):

@@ -8,9 +8,10 @@ from apps.orders.models import Order
 
 
 _TENDER_TO_ENTRY_TYPE = {
-        "cash": AccountingEntry.EntryType.SALE_CASH,
-        "card": AccountingEntry.EntryType.SALE_CARD,
-    }
+    "cash": AccountingEntry.EntryType.SALE_CASH,
+    "card": AccountingEntry.EntryType.SALE_CARD,
+}
+
 
 def record_sale(*, order: Order, tender: str) -> AccountingEntry:
     """
@@ -20,7 +21,7 @@ def record_sale(*, order: Order, tender: str) -> AccountingEntry:
     передаются только по имени: record_sale(order=order)
     Это защита от случайной передачи в неправильном порядке.
     """
-    
+
     # ContentType.objects.get_for_model() возвращает запись
     # из таблицы django_content_type для модели Order.
     # Django кеширует это — повторные вызовы не идут в базу.

@@ -7,6 +7,7 @@ def test_delete_archives_unit_and_list_hides_it(admin_client):
     client, admin, org = admin_client
 
     from apps.products.models import Unit
+
     u = Unit.objects.create(org=org, name="pcs", status=Unit.STATUS_ACTIVE)
 
     resp = client.delete(f"/api/v1/units/{u.public_id}/")

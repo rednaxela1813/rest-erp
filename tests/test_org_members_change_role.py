@@ -18,6 +18,7 @@ def test_org_admin_can_change_member_role(admin_client, user_factory, member_fac
     assert resp.status_code == 200, resp.content
 
     from config.orgs.models import OrganizationMember
+
     m.refresh_from_db()
     assert m.role == "admin"
     assert OrganizationMember.objects.get(id=m.id).role == "admin"

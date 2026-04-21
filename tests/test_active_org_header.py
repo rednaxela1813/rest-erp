@@ -32,7 +32,7 @@ def test_org_context_endpoint_returns_org_when_member(member_client):
     client, user, org = member_client
 
     resp = client.get("/api/v1/orgs/context/")
-    
+
     assert resp.status_code == 200
     data = resp.json()
     assert data["public_id"] == str(org.public_id)
@@ -44,19 +44,17 @@ def test_org_context_endpoint_denies_when_not_member(auth_client, org_factory, s
     Тест проверяет, что пользователь не может получить информацию о чужой организации.
     """
     client, user = auth_client()
-    
+
     # Создаем организацию, в которой пользователь не состоит
     org = org_factory(name="Other Org")
     set_org_header(client, org)
 
     resp = client.get("/api/v1/orgs/context/")
-    
+
     assert resp.status_code in (403, 404)
 
 
-def test_org_context_uses_session_active_org_when_header_missing(
-    auth_client, org_factory, member_factory
-):
+def test_org_context_uses_session_active_org_when_header_missing(auth_client, org_factory, member_factory):
     client, user = auth_client()
     org = org_factory(name="Session Org")
     member_factory(org=org, user=user, role="member")

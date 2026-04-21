@@ -3,7 +3,6 @@ from decimal import Decimal
 from rest_framework.exceptions import ValidationError
 
 
-
 @pytest.mark.django_db
 def test_authorize_payment_requires_open_session(admin_client):
     client, user, org = admin_client

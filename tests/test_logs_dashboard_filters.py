@@ -63,9 +63,7 @@ def test_purge_old_logs_deletes_entries(org_factory):
         message="old",
         org_id=str(org.public_id),
     )
-    LogEntry.objects.filter(id=old_entry.id).update(
-        created_at=timezone.now() - timedelta(days=40)
-    )
+    LogEntry.objects.filter(id=old_entry.id).update(created_at=timezone.now() - timedelta(days=40))
     LogEntry.objects.create(
         level="INFO",
         event="new",

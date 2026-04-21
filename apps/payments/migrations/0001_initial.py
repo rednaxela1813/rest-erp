@@ -8,181 +8,432 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
-        ('orders', '0001_initial'),
-        ('orgs', '0001_initial'),
+        ("orders", "0001_initial"),
+        ("orgs", "0001_initial"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='Terminal',
+            name="Terminal",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('public_id', models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('name', models.CharField(max_length=255)),
-                ('code', models.CharField(blank=True, default='', max_length=64)),
-                ('status', models.CharField(choices=[('active', 'Active'), ('inactive', 'Inactive')], default='active', max_length=16)),
-                ('org', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='%(class)ss', to='orgs.organization')),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("public_id", models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("name", models.CharField(max_length=255)),
+                ("code", models.CharField(blank=True, default="", max_length=64)),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[("active", "Active"), ("inactive", "Inactive")], default="active", max_length=16
+                    ),
+                ),
+                (
+                    "org",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE, related_name="%(class)ss", to="orgs.organization"
+                    ),
+                ),
             ],
             options={
-                'ordering': ['id'],
+                "ordering": ["id"],
             },
         ),
         migrations.CreateModel(
-            name='OrderPayment',
+            name="OrderPayment",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('public_id', models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('tender', models.CharField(choices=[('cash', 'Cash'), ('card', 'Card'), ('online', 'Online')], max_length=16)),
-                ('status', models.CharField(choices=[('pending', 'Pending'), ('authorized', 'Authorized'), ('captured', 'Captured'), ('cancelled', 'Cancelled'), ('failed', 'Failed')], default='pending', max_length=16)),
-                ('amount', models.DecimalField(decimal_places=2, default=Decimal('0.00'), max_digits=12)),
-                ('currency', models.CharField(max_length=3)),
-                ('provider', models.CharField(default='manual', max_length=64)),
-                ('provider_reference', models.CharField(blank=True, default='', max_length=128)),
-                ('raw_provider_payload', models.JSONField(blank=True, default=dict)),
-                ('idempotency_key', models.CharField(blank=True, max_length=64, null=True)),
-                ('authorized_at', models.DateTimeField(blank=True, null=True)),
-                ('captured_at', models.DateTimeField(blank=True, null=True)),
-                ('cancelled_at', models.DateTimeField(blank=True, null=True)),
-                ('failure_reason', models.CharField(blank=True, default='', max_length=255)),
-                ('capture_status', models.CharField(blank=True, choices=[('pending', 'Pending'), ('timeout', 'Timeout'), ('confirmed', 'Confirmed')], max_length=16, null=True)),
-                ('fiscal_status', models.CharField(blank=True, choices=[('pending', 'Pending'), ('failed', 'Failed'), ('confirmed', 'Confirmed')], max_length=16, null=True)),
-                ('order', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='payments', to='orders.order')),
-                ('org', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='%(class)ss', to='orgs.organization')),
-                ('terminal', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='payments', to='payments.terminal')),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("public_id", models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "tender",
+                    models.CharField(choices=[("cash", "Cash"), ("card", "Card"), ("online", "Online")], max_length=16),
+                ),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[
+                            ("pending", "Pending"),
+                            ("authorized", "Authorized"),
+                            ("captured", "Captured"),
+                            ("cancelled", "Cancelled"),
+                            ("failed", "Failed"),
+                        ],
+                        default="pending",
+                        max_length=16,
+                    ),
+                ),
+                ("amount", models.DecimalField(decimal_places=2, default=Decimal("0.00"), max_digits=12)),
+                ("currency", models.CharField(max_length=3)),
+                ("provider", models.CharField(default="manual", max_length=64)),
+                ("provider_reference", models.CharField(blank=True, default="", max_length=128)),
+                ("raw_provider_payload", models.JSONField(blank=True, default=dict)),
+                ("idempotency_key", models.CharField(blank=True, max_length=64, null=True)),
+                ("authorized_at", models.DateTimeField(blank=True, null=True)),
+                ("captured_at", models.DateTimeField(blank=True, null=True)),
+                ("cancelled_at", models.DateTimeField(blank=True, null=True)),
+                ("failure_reason", models.CharField(blank=True, default="", max_length=255)),
+                (
+                    "capture_status",
+                    models.CharField(
+                        blank=True,
+                        choices=[("pending", "Pending"), ("timeout", "Timeout"), ("confirmed", "Confirmed")],
+                        max_length=16,
+                        null=True,
+                    ),
+                ),
+                (
+                    "fiscal_status",
+                    models.CharField(
+                        blank=True,
+                        choices=[("pending", "Pending"), ("failed", "Failed"), ("confirmed", "Confirmed")],
+                        max_length=16,
+                        null=True,
+                    ),
+                ),
+                (
+                    "order",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT, related_name="payments", to="orders.order"
+                    ),
+                ),
+                (
+                    "org",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE, related_name="%(class)ss", to="orgs.organization"
+                    ),
+                ),
+                (
+                    "terminal",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="payments",
+                        to="payments.terminal",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['-created_at'],
+                "ordering": ["-created_at"],
             },
         ),
         migrations.CreateModel(
-            name='CashierSession',
+            name="CashierSession",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('public_id', models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('status', models.CharField(choices=[('open', 'Open'), ('closed', 'Closed')], default='open', max_length=16)),
-                ('opened_at', models.DateTimeField(auto_now_add=True)),
-                ('closed_at', models.DateTimeField(blank=True, null=True)),
-                ('cash_drawer_start', models.DecimalField(decimal_places=2, default=Decimal('0.00'), max_digits=12)),
-                ('cash_drawer_end', models.DecimalField(blank=True, decimal_places=2, max_digits=12, null=True)),
-                ('cashier', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='cashier_sessions', to=settings.AUTH_USER_MODEL)),
-                ('org', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='%(class)ss', to='orgs.organization')),
-                ('terminal', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='sessions', to='payments.terminal')),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("public_id", models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "status",
+                    models.CharField(choices=[("open", "Open"), ("closed", "Closed")], default="open", max_length=16),
+                ),
+                ("opened_at", models.DateTimeField(auto_now_add=True)),
+                ("closed_at", models.DateTimeField(blank=True, null=True)),
+                ("cash_drawer_start", models.DecimalField(decimal_places=2, default=Decimal("0.00"), max_digits=12)),
+                ("cash_drawer_end", models.DecimalField(blank=True, decimal_places=2, max_digits=12, null=True)),
+                (
+                    "cashier",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="cashier_sessions",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
+                (
+                    "org",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE, related_name="%(class)ss", to="orgs.organization"
+                    ),
+                ),
+                (
+                    "terminal",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT, related_name="sessions", to="payments.terminal"
+                    ),
+                ),
             ],
         ),
         migrations.CreateModel(
-            name='CashDrawerMovement',
+            name="CashDrawerMovement",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('public_id', models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
-                ('movement_type', models.CharField(choices=[('opening_float', 'Opening float'), ('cash_in', 'Cash in'), ('cash_out', 'Cash out'), ('sale_cash', 'Cash sale')], max_length=32)),
-                ('amount', models.DecimalField(decimal_places=2, default=Decimal('0.00'), max_digits=12)),
-                ('reason', models.CharField(blank=True, default='', max_length=255)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('actor', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='cash_drawer_movements', to=settings.AUTH_USER_MODEL)),
-                ('session', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='cash_movements', to='payments.cashiersession')),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("public_id", models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
+                (
+                    "movement_type",
+                    models.CharField(
+                        choices=[
+                            ("opening_float", "Opening float"),
+                            ("cash_in", "Cash in"),
+                            ("cash_out", "Cash out"),
+                            ("sale_cash", "Cash sale"),
+                        ],
+                        max_length=32,
+                    ),
+                ),
+                ("amount", models.DecimalField(decimal_places=2, default=Decimal("0.00"), max_digits=12)),
+                ("reason", models.CharField(blank=True, default="", max_length=255)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "actor",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="cash_drawer_movements",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
+                (
+                    "session",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="cash_movements",
+                        to="payments.cashiersession",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['-created_at'],
-                'indexes': [models.Index(fields=['session', 'created_at'], name='payments_ca_session_3c4599_idx')],
+                "ordering": ["-created_at"],
+                "indexes": [models.Index(fields=["session", "created_at"], name="payments_ca_session_3c4599_idx")],
             },
         ),
         migrations.CreateModel(
-            name='FiscalReceipt',
+            name="FiscalReceipt",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('public_id', models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
-                ('receipt_type', models.CharField(choices=[('sale', 'Sale'), ('refund', 'Refund'), ('storno', 'Storno'), ('cash_in', 'Cash in'), ('cash_out', 'Cash out')], max_length=16)),
-                ('total', models.DecimalField(decimal_places=2, default=Decimal('0.00'), max_digits=12)),
-                ('tax_total', models.DecimalField(decimal_places=2, default=Decimal('0.00'), max_digits=12)),
-                ('currency', models.CharField(max_length=3)),
-                ('uid', models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
-                ('raw_payload', models.JSONField(blank=True, default=dict)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('order', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='fiscal_receipts', to='orders.order')),
-                ('org', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='fiscal_receipts', to='orgs.organization')),
-                ('payment', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='fiscal_receipts', to='payments.orderpayment')),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("public_id", models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
+                (
+                    "receipt_type",
+                    models.CharField(
+                        choices=[
+                            ("sale", "Sale"),
+                            ("refund", "Refund"),
+                            ("storno", "Storno"),
+                            ("cash_in", "Cash in"),
+                            ("cash_out", "Cash out"),
+                        ],
+                        max_length=16,
+                    ),
+                ),
+                ("total", models.DecimalField(decimal_places=2, default=Decimal("0.00"), max_digits=12)),
+                ("tax_total", models.DecimalField(decimal_places=2, default=Decimal("0.00"), max_digits=12)),
+                ("currency", models.CharField(max_length=3)),
+                ("uid", models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
+                ("raw_payload", models.JSONField(blank=True, default=dict)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "order",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="fiscal_receipts",
+                        to="orders.order",
+                    ),
+                ),
+                (
+                    "org",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="fiscal_receipts",
+                        to="orgs.organization",
+                    ),
+                ),
+                (
+                    "payment",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="fiscal_receipts",
+                        to="payments.orderpayment",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['-created_at'],
-                'constraints': [models.UniqueConstraint(condition=models.Q(('payment__isnull', False)), fields=('payment', 'receipt_type'), name='uniq_fiscal_receipt_per_payment_type')],
+                "ordering": ["-created_at"],
+                "constraints": [
+                    models.UniqueConstraint(
+                        condition=models.Q(("payment__isnull", False)),
+                        fields=("payment", "receipt_type"),
+                        name="uniq_fiscal_receipt_per_payment_type",
+                    )
+                ],
             },
         ),
         migrations.CreateModel(
-            name='DeviceCommand',
+            name="DeviceCommand",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('public_id', models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
-                ('command_type', models.CharField(choices=[('fiscalize_sale', 'Fiscalize sale'), ('fiscalize_refund', 'Fiscalize refund'), ('fiscalize_storno', 'Fiscalize storno'), ('print_kot', 'Print kitchen order ticket'), ('print_receipt', 'Print customer receipt'), ('payment_capture', 'Capture payment')], max_length=32)),
-                ('status', models.CharField(choices=[('pending', 'Pending'), ('sent', 'Sent'), ('acked', 'Acknowledged'), ('failed', 'Failed')], default='pending', max_length=16)),
-                ('payload', models.JSONField(blank=True, default=dict)),
-                ('idempotency_key', models.CharField(max_length=128)),
-                ('retries', models.PositiveIntegerField(default=0)),
-                ('max_retries', models.PositiveIntegerField(default=5)),
-                ('last_error', models.TextField(blank=True, default='')),
-                ('next_attempt_at', models.DateTimeField(blank=True, db_index=True, null=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('order', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='device_commands', to='orders.order')),
-                ('org', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='device_commands', to='orgs.organization')),
-                ('payment', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='device_commands', to='payments.orderpayment')),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("public_id", models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
+                (
+                    "command_type",
+                    models.CharField(
+                        choices=[
+                            ("fiscalize_sale", "Fiscalize sale"),
+                            ("fiscalize_refund", "Fiscalize refund"),
+                            ("fiscalize_storno", "Fiscalize storno"),
+                            ("print_kot", "Print kitchen order ticket"),
+                            ("print_receipt", "Print customer receipt"),
+                            ("payment_capture", "Capture payment"),
+                        ],
+                        max_length=32,
+                    ),
+                ),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[
+                            ("pending", "Pending"),
+                            ("sent", "Sent"),
+                            ("acked", "Acknowledged"),
+                            ("failed", "Failed"),
+                        ],
+                        default="pending",
+                        max_length=16,
+                    ),
+                ),
+                ("payload", models.JSONField(blank=True, default=dict)),
+                ("idempotency_key", models.CharField(max_length=128)),
+                ("retries", models.PositiveIntegerField(default=0)),
+                ("max_retries", models.PositiveIntegerField(default=5)),
+                ("last_error", models.TextField(blank=True, default="")),
+                ("next_attempt_at", models.DateTimeField(blank=True, db_index=True, null=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "order",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="device_commands",
+                        to="orders.order",
+                    ),
+                ),
+                (
+                    "org",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="device_commands",
+                        to="orgs.organization",
+                    ),
+                ),
+                (
+                    "payment",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="device_commands",
+                        to="payments.orderpayment",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['-created_at'],
-                'constraints': [models.UniqueConstraint(fields=('org', 'idempotency_key'), name='uniq_device_command_idempotency_per_org')],
+                "ordering": ["-created_at"],
+                "constraints": [
+                    models.UniqueConstraint(
+                        fields=("org", "idempotency_key"), name="uniq_device_command_idempotency_per_org"
+                    )
+                ],
             },
         ),
         migrations.CreateModel(
-            name='PaymentEvent',
+            name="PaymentEvent",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('public_id', models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
-                ('event_type', models.CharField(choices=[('authorized', 'Authorized'), ('captured', 'Captured'), ('cancelled', 'Cancelled'), ('failed', 'Failed')], max_length=32)),
-                ('payload', models.JSONField(blank=True, default=dict)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('actor', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='payment_events', to=settings.AUTH_USER_MODEL)),
-                ('org', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='payment_events', to='orgs.organization')),
-                ('payment', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='events', to='payments.orderpayment')),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("public_id", models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
+                (
+                    "event_type",
+                    models.CharField(
+                        choices=[
+                            ("authorized", "Authorized"),
+                            ("captured", "Captured"),
+                            ("cancelled", "Cancelled"),
+                            ("failed", "Failed"),
+                        ],
+                        max_length=32,
+                    ),
+                ),
+                ("payload", models.JSONField(blank=True, default=dict)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "actor",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="payment_events",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
+                (
+                    "org",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="payment_events",
+                        to="orgs.organization",
+                    ),
+                ),
+                (
+                    "payment",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE, related_name="events", to="payments.orderpayment"
+                    ),
+                ),
             ],
             options={
-                'ordering': ['-created_at'],
-                'indexes': [models.Index(fields=['org', 'payment', 'created_at'], name='payments_pa_org_id_c91613_idx')],
+                "ordering": ["-created_at"],
+                "indexes": [
+                    models.Index(fields=["org", "payment", "created_at"], name="payments_pa_org_id_c91613_idx")
+                ],
             },
         ),
         migrations.CreateModel(
-            name='PaymentProviderConfig',
+            name="PaymentProviderConfig",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('public_id', models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('provider', models.CharField(max_length=64)),
-                ('name', models.CharField(blank=True, default='', max_length=255)),
-                ('credentials', models.JSONField(blank=True, default=dict)),
-                ('is_active', models.BooleanField(default=True)),
-                ('org', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='%(class)ss', to='orgs.organization')),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("public_id", models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("provider", models.CharField(max_length=64)),
+                ("name", models.CharField(blank=True, default="", max_length=255)),
+                ("credentials", models.JSONField(blank=True, default=dict)),
+                ("is_active", models.BooleanField(default=True)),
+                (
+                    "org",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE, related_name="%(class)ss", to="orgs.organization"
+                    ),
+                ),
             ],
             options={
-                'ordering': ['id'],
-                'unique_together': {('org', 'provider')},
+                "ordering": ["id"],
+                "unique_together": {("org", "provider")},
             },
         ),
         migrations.AddConstraint(
-            model_name='orderpayment',
-            constraint=models.UniqueConstraint(condition=models.Q(('idempotency_key__isnull', False)), fields=('org', 'idempotency_key'), name='uniq_payment_idempotency_per_org'),
+            model_name="orderpayment",
+            constraint=models.UniqueConstraint(
+                condition=models.Q(("idempotency_key__isnull", False)),
+                fields=("org", "idempotency_key"),
+                name="uniq_payment_idempotency_per_org",
+            ),
         ),
         migrations.AddConstraint(
-            model_name='cashiersession',
-            constraint=models.UniqueConstraint(condition=models.Q(('status', 'open')), fields=('org', 'terminal'), name='uniq_open_session_per_terminal_org'),
+            model_name="cashiersession",
+            constraint=models.UniqueConstraint(
+                condition=models.Q(("status", "open")),
+                fields=("org", "terminal"),
+                name="uniq_open_session_per_terminal_org",
+            ),
         ),
     ]

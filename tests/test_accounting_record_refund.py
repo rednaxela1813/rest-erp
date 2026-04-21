@@ -50,6 +50,7 @@ def _make_paid_order_with_payment(*, org, product, tender="cash", lot=None):
 
     if lot is not None:
         from apps.inventory.services.deduct_stock import deduct_stock
+
         deduct_stock(org=org, product=product, quantity=Decimal("1.000"), reason="order_paid")
 
     return order
@@ -58,6 +59,7 @@ def _make_paid_order_with_payment(*, org, product, tender="cash", lot=None):
 # ---------------------------------------------------------------------------
 # Tests: record_refund
 # ---------------------------------------------------------------------------
+
 
 def test_record_refund_cash_creates_refund_cash_entry(org_factory):
     """Возврат наличными → запись REFUND_CASH."""
@@ -113,14 +115,13 @@ def test_record_refund_is_idempotent(org_factory):
     entry2 = record_refund(order=order, tender="cash")
 
     assert entry1.pk == entry2.pk
-    assert AccountingEntry.objects.filter(
-        org=org, entry_type=AccountingEntry.EntryType.REFUND_CASH
-    ).count() == 1
+    assert AccountingEntry.objects.filter(org=org, entry_type=AccountingEntry.EntryType.REFUND_CASH).count() == 1
 
 
 # ---------------------------------------------------------------------------
 # Tests: record_stock_return
 # ---------------------------------------------------------------------------
+
 
 def test_record_stock_return_creates_stock_receipt_entry(org_factory, lot_factory):
     """record_stock_return создаёт запись STOCK_RECEIPT."""
@@ -143,6 +144,7 @@ def test_record_stock_return_creates_stock_receipt_entry(org_factory, lot_factor
 # ---------------------------------------------------------------------------
 # Tests: refund_paid_order — полный flow
 # ---------------------------------------------------------------------------
+
 
 def test_refund_cash_order_writes_refund_cash_entry(org_factory, lot_factory):
     """refund_paid_order для cash-заказа → запись REFUND_CASH."""
@@ -185,9 +187,7 @@ def test_refund_writes_stock_return_entry(org_factory, lot_factory):
 
     refund_paid_order(order=order, actor=None)
 
-    assert AccountingEntry.objects.filter(
-        org=org, entry_type=AccountingEntry.EntryType.STOCK_RECEIPT
-    ).count() >= 1
+    assert AccountingEntry.objects.filter(org=org, entry_type=AccountingEntry.EntryType.STOCK_RECEIPT).count() >= 1
 
 
 def test_prepared_product_refund_no_stock_return_entry(org_factory):
@@ -200,9 +200,5 @@ def test_prepared_product_refund_no_stock_return_entry(org_factory):
 
     refund_paid_order(order=order, actor=None)
 
-    assert AccountingEntry.objects.filter(
-        org=org, entry_type=AccountingEntry.EntryType.REFUND_CASH
-    ).count() == 1
-    assert AccountingEntry.objects.filter(
-        org=org, entry_type=AccountingEntry.EntryType.STOCK_RECEIPT
-    ).count() == 0
+    assert AccountingEntry.objects.filter(org=org, entry_type=AccountingEntry.EntryType.REFUND_CASH).count() == 1
+    assert AccountingEntry.objects.filter(org=org, entry_type=AccountingEntry.EntryType.STOCK_RECEIPT).count() == 0

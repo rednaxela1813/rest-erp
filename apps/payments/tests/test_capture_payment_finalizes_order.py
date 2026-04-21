@@ -19,7 +19,9 @@ def test_capture_payment_finalizes_order_and_deducts_stock(admin_client, monkeyp
     product = Product.objects.create(org=org, name="Cola", status=Product.STATUS_ACTIVE)
     unit = Unit.objects.create(org=org, name="pcs", status=Unit.STATUS_ACTIVE)
     tax = TaxRate.objects.create(org=org, name="VAT 20", rate=Decimal("20.00"), status=TaxRate.STATUS_ACTIVE)
-    receive_stock(org=org, product=product, initial_qty=Decimal("10.000"), unit_cost=Decimal("1.00"), label_code="LOT-COLA")
+    receive_stock(
+        org=org, product=product, initial_qty=Decimal("10.000"), unit_cost=Decimal("1.00"), label_code="LOT-COLA"
+    )
 
     OrderItem.objects.create(
         order=order,
@@ -84,7 +86,9 @@ def test_capture_payment_with_ekasa_keeps_order_unfinalized_until_fiscal_confirm
     product = Product.objects.create(org=org, name="Cola", status=Product.STATUS_ACTIVE)
     unit = Unit.objects.create(org=org, name="pcs", status=Unit.STATUS_ACTIVE)
     tax = TaxRate.objects.create(org=org, name="VAT 20", rate=Decimal("20.00"), status=TaxRate.STATUS_ACTIVE)
-    receive_stock(org=org, product=product, initial_qty=Decimal("10.000"), unit_cost=Decimal("1.00"), label_code="LOT-COLA-EKASA")
+    receive_stock(
+        org=org, product=product, initial_qty=Decimal("10.000"), unit_cost=Decimal("1.00"), label_code="LOT-COLA-EKASA"
+    )
 
     OrderItem.objects.create(
         order=order,
@@ -114,11 +118,11 @@ def test_capture_payment_with_ekasa_keeps_order_unfinalized_until_fiscal_confirm
         "apps.payments.providers.registry.get_provider_for_payment",
         lambda p: type("P", (), {"capture": staticmethod(fake_capture)}),
     )
-    
+
     monkeypatch.setattr(
         "apps.payments.tasks.process_device_commands_ekasa.delay",
-            lambda *args, **kwargs: None,
-     )
+        lambda *args, **kwargs: None,
+    )
 
     capture_payment(payment=payment, actor=user)
 
@@ -131,11 +135,14 @@ def test_capture_payment_with_ekasa_keeps_order_unfinalized_until_fiscal_confirm
 
     lot = StockLot.objects.get(org=org, label_code="LOT-COLA-EKASA")
     assert lot.remaining_qty == Decimal("10.000")
-    assert AccountingEntry.objects.filter(
-        org=org,
-        entry_type__in=[
-            AccountingEntry.EntryType.SALE_CASH,
-            AccountingEntry.EntryType.SALE_CARD,
-        ],
-    ).count() == 0
+    assert (
+        AccountingEntry.objects.filter(
+            org=org,
+            entry_type__in=[
+                AccountingEntry.EntryType.SALE_CASH,
+                AccountingEntry.EntryType.SALE_CARD,
+            ],
+        ).count()
+        == 0
+    )
     assert FiscalReceipt.objects.filter(payment=payment).count() == 0

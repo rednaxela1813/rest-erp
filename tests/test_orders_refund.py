@@ -22,9 +22,14 @@ def test_admin_can_refund_paid_order(admin_client, payment_factory, capture_paym
         unit=unit,
         tax_rate=tax,
         unit_price=Decimal("5.00"),
-        
     )
-    receive_stock(org=org, product=product, initial_qty=Decimal("10.000"), unit_cost=Decimal("1.00"), label_code=f"LOT-{product.name.upper()}")
+    receive_stock(
+        org=org,
+        product=product,
+        initial_qty=Decimal("10.000"),
+        unit_cost=Decimal("1.00"),
+        label_code=f"LOT-{product.name.upper()}",
+    )
 
     order = Order.objects.create(org=org)
     OrderItem.objects.create(
@@ -55,9 +60,7 @@ def test_admin_can_refund_paid_order(admin_client, payment_factory, capture_paym
     receipt = FiscalReceipt.objects.get(order=order, receipt_type=FiscalReceipt.Type.REFUND)
     assert receipt.payment_id == payment.id
 
-    refund_commands = DeviceCommand.objects.filter(
-        payment=payment, command_type=DeviceCommand.Type.FISCALIZE_REFUND
-    )
+    refund_commands = DeviceCommand.objects.filter(payment=payment, command_type=DeviceCommand.Type.FISCALIZE_REFUND)
     assert refund_commands.count() == 1
     assert refund_commands.first().payload["receipt_id"] == "ekasa-sale-1"
 
@@ -75,9 +78,14 @@ def test_member_cannot_refund_paid_order(member_client, payment_factory, capture
         unit=unit,
         tax_rate=tax,
         unit_price=Decimal("5.00"),
-        
     )
-    receive_stock(org=org, product=product, initial_qty=Decimal("10.000"), unit_cost=Decimal("1.00"), label_code=f"LOT-{product.name.upper()}")
+    receive_stock(
+        org=org,
+        product=product,
+        initial_qty=Decimal("10.000"),
+        unit_cost=Decimal("1.00"),
+        label_code=f"LOT-{product.name.upper()}",
+    )
 
     order = Order.objects.create(org=org)
     OrderItem.objects.create(

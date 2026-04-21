@@ -3,9 +3,9 @@
 from rest_framework import serializers
 
 from config.orgs.org_context import get_request_org
-from apps.products.models import Product, ProductAddon, ProductVariant, Unit, TaxRate
 
 from .models import KitchenTicket, Order, OrderItem, OrderItemAddon, OrderStatusEvent
+from .logic.create_order_item import create_order_item
 from .logic.status_fsm import assert_can_transition
 
 
@@ -87,66 +87,9 @@ class OrderItemCreateSerializer(serializers.ModelSerializer):
         read_only_fields = ["public_id", "product_name"]
 
     def validate(self, attrs):
-        """
-        Валидируем, что связанные сущности существуют, активны и принадлежат org из X-ORG-ID.
-        """
         request = self.context["request"]
         org = get_request_org(request)
-
-        try:
-            product_obj = Product.objects.get(
-                org=org,
-                public_id=attrs["product"],
-                status=Product.STATUS_ACTIVE,
-            )
-        except Product.DoesNotExist:
-            raise serializers.ValidationError({"product": "Invalid product."})
-
-        try:
-            unit_obj = Unit.objects.get(
-                org=org,
-                public_id=attrs["unit"],
-                status=Unit.STATUS_ACTIVE,
-            )
-        except Unit.DoesNotExist:
-            raise serializers.ValidationError({"unit": "Invalid unit."})
-
-        try:
-            tax_obj = TaxRate.objects.get(
-                org=org,
-                public_id=attrs["tax_rate"],
-                status=TaxRate.STATUS_ACTIVE,
-            )
-        except TaxRate.DoesNotExist:
-            raise serializers.ValidationError({"tax_rate": "Invalid tax_rate."})
-
-        attrs["product_obj"] = product_obj
-        attrs["unit_obj"] = unit_obj
-        attrs["tax_obj"] = tax_obj
-
-        variant_public_id = attrs.get("variant")
-        if variant_public_id:
-            try:
-                variant_obj = product_obj.variants.get(
-                    public_id=variant_public_id,
-                    status=ProductVariant.STATUS_ACTIVE,
-                )
-            except ProductVariant.DoesNotExist:
-                raise serializers.ValidationError({"variant": "Invalid variant."})
-            attrs["variant_obj"] = variant_obj
-
-        addon_public_ids = attrs.get("addons") or []
-        addon_objs = list(
-            ProductAddon.objects.filter(
-                product=product_obj,
-                public_id__in=addon_public_ids,
-                status=ProductAddon.STATUS_ACTIVE,
-            )
-        )
-        if len(addon_objs) != len(addon_public_ids):
-            raise serializers.ValidationError({"addons": "Invalid addons."})
-        attrs["addon_objs"] = addon_objs
-        return attrs
+        return create_order_item(attrs, org)
 
     def create(self, validated_data):
         """

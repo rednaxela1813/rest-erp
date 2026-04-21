@@ -45,9 +45,7 @@ def test_mock_agent_acks_and_creates_fiscal_receipt(org_factory, settings):
     command.refresh_from_db()
     assert result["ack"] == 1
     assert command.status == DeviceCommand.Status.ACKED
-    assert FiscalReceipt.objects.filter(
-        payment=payment, receipt_type=FiscalReceipt.Type.SALE
-    ).exists()
+    assert FiscalReceipt.objects.filter(payment=payment, receipt_type=FiscalReceipt.Type.SALE).exists()
 
 
 @pytest.mark.django_db

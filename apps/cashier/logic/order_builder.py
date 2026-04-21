@@ -1,10 +1,10 @@
 """
 Order creation from cashier cart.
 """
+
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import List
 
 from django.db import transaction
 
@@ -15,7 +15,7 @@ from config.orgs.models import Organization
 from .cart import get_product_unit_price
 
 
-def build_order_from_cart(*, org: Organization, cart_items: List[dict]) -> Order:
+def build_order_from_cart(*, org: Organization, cart_items: list[dict]) -> Order:
     """
     Создаёт Order и OrderItem'ы из cart_items.
     Бросает ValueError если корзина пустая или у продукта нет unit/tax_rate.
@@ -49,6 +49,4 @@ def build_order_from_cart(*, org: Organization, cart_items: List[dict]) -> Order
 
 
 def product_checkout_error(product: Product) -> str:
-    return (
-        f'Product "{product.name}" cannot be sold in cashier until unit and tax rate are set.'
-    )
+    return f'Product "{product.name}" cannot be sold in cashier until unit and tax rate are set.'

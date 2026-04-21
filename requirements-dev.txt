@@ -1,0 +1,6 @@
+-r requirements.txt
+django-stubs>=5.2.1,<5.3
+djangorestframework-stubs==3.16.1
+mypy==1.15.0
+pre-commit==4.2.0
+ruff==0.11.8

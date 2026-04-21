@@ -6,6 +6,7 @@ from apps.accounting.models import AccountingEntry
 from apps.inventory.models import StockMovement
 from decimal import Decimal
 
+
 def record_stock_out(*, movement: StockMovement) -> AccountingEntry:
     """
     Создаёт запись типа STOCK_OUT когда товар списан со склада при продаже.
@@ -17,9 +18,7 @@ def record_stock_out(*, movement: StockMovement) -> AccountingEntry:
     ct = ContentType.objects.get_for_model(StockMovement)
 
     # Себестоимость списанного = сколько единиц × цена за единицу в этой партии
-    cost = (movement.quantity * movement.unit_cost_snapshot).quantize(
-        movement.unit_cost_snapshot.__class__("0.01")
-    )
+    cost = (movement.quantity * movement.unit_cost_snapshot).quantize(movement.unit_cost_snapshot.__class__("0.01"))
 
     entry, created = AccountingEntry.objects.get_or_create(
         # По этим полям ищем — защита от дублей

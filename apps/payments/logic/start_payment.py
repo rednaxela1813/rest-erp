@@ -34,9 +34,9 @@ def start_payment(
     )
     with transaction.atomic():
         if idempotency_key:
-            existing = OrderPayment.objects.filter(
-                org=order.org, idempotency_key=idempotency_key
-            ).select_for_update().first()
+            existing = (
+                OrderPayment.objects.filter(org=order.org, idempotency_key=idempotency_key).select_for_update().first()
+            )
             if existing:
                 if (
                     existing.order_id != order.id
@@ -50,9 +50,7 @@ def start_payment(
                         existing_payment_id=str(existing.public_id),
                         idempotency_key=idempotency_key,
                     )
-                    raise ValidationError(
-                        {"idempotency_key": ["Idempotency key already used."]}
-                    )
+                    raise ValidationError({"idempotency_key": ["Idempotency key already used."]})
                 logger.info(
                     "payment_start_reused_existing",
                     order_id=str(order.public_id),

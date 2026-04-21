@@ -1,6 +1,12 @@
 from django.urls import path
-from .api_views import MyOrganizationsView, OrganizationCreateView, \
-OrgContextView, OrgNoteListCreateView, OrgMemberListCreateApi, OrgMemberDetailApi
+from .api_views import (
+    MyOrganizationsView,
+    OrganizationCreateView,
+    OrgContextView,
+    OrgNoteListCreateView,
+    OrgMemberListCreateApi,
+    OrgMemberDetailApi,
+)
 
 
 urlpatterns = [

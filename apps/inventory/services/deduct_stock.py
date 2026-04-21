@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.db import OperationalError
 from django.db import transaction
 import structlog
 
@@ -35,58 +36,69 @@ def deduct_stock(
         quantity=str(quantity),
         reason=reason,
     )
-    with transaction.atomic():
-        lots = (
-            StockLot.objects
-            .select_for_update()
-            .filter(org=org, product=product, status=StockLot.Status.ACTIVE)
-            .order_by("received_at", "id")
+    try:
+        with transaction.atomic():
+            lots = (
+                StockLot.objects.select_for_update()
+                .filter(org=org, product=product, status=StockLot.Status.ACTIVE)
+                .order_by("received_at", "id")
+            )
+
+            total_available = sum(lot.remaining_qty for lot in lots)
+            if total_available < quantity:
+                logger.warning(
+                    "stock_deduct_insufficient",
+                    org_id=str(org.public_id),
+                    product_id=str(product.public_id),
+                    product_name=product.name,
+                    requested_qty=str(quantity),
+                    total_available=str(total_available),
+                    reason=reason,
+                )
+                raise InsufficientStock(
+                    f"Недостаточно остатка для '{product}': запрошено {quantity}, доступно {total_available}."
+                )
+
+            movements = []
+            remaining_to_deduct = quantity
+
+            for lot in lots:
+                if remaining_to_deduct <= 0:
+                    break
+
+                deduct_from_lot = min(lot.remaining_qty, remaining_to_deduct)
+                lot.remaining_qty -= deduct_from_lot
+                remaining_to_deduct -= deduct_from_lot
+
+                if lot.remaining_qty == 0:
+                    lot.status = StockLot.Status.DEPLETED
+
+                lot.save(update_fields=["remaining_qty", "status", "updated_at"])
+
+                movement = StockMovement.objects.create(
+                    org=org,
+                    product=product,
+                    lot=lot,
+                    movement_type=StockMovement.MovementType.OUT,
+                    quantity=deduct_from_lot,
+                    unit_cost_snapshot=lot.unit_cost,
+                    reason=reason,
+                    comment=comment,
+                )
+                movements.append(movement)
+                record_stock_out(movement=movement)
+    except OperationalError as exc:
+        if "database table is locked" not in str(exc).lower():
+            raise
+        logger.warning(
+            "stock_deduct_locked",
+            org_id=str(org.public_id),
+            product_id=str(product.public_id),
+            product_name=product.name,
+            quantity=str(quantity),
+            reason=reason,
         )
-
-        total_available = sum(lot.remaining_qty for lot in lots)
-        if total_available < quantity:
-            logger.warning(
-                "stock_deduct_insufficient",
-                org_id=str(org.public_id),
-                product_id=str(product.public_id),
-                product_name=product.name,
-                requested_qty=str(quantity),
-                total_available=str(total_available),
-                reason=reason,
-            )
-            raise InsufficientStock(
-                f"Недостаточно остатка для '{product}': "
-                f"запрошено {quantity}, доступно {total_available}."
-            )
-
-        movements = []
-        remaining_to_deduct = quantity
-
-        for lot in lots:
-            if remaining_to_deduct <= 0:
-                break
-
-            deduct_from_lot = min(lot.remaining_qty, remaining_to_deduct)
-            lot.remaining_qty -= deduct_from_lot
-            remaining_to_deduct -= deduct_from_lot
-
-            if lot.remaining_qty == 0:
-                lot.status = StockLot.Status.DEPLETED
-
-            lot.save(update_fields=["remaining_qty", "status", "updated_at"])
-
-            movement = StockMovement.objects.create(
-                org=org,
-                product=product,
-                lot=lot,
-                movement_type=StockMovement.MovementType.OUT,
-                quantity=deduct_from_lot,
-                unit_cost_snapshot=lot.unit_cost,
-                reason=reason,
-                comment=comment,
-            )
-            movements.append(movement)
-            record_stock_out(movement=movement)
+        raise InsufficientStock(f"Недостаточно остатка для '{product}': запрошено {quantity}, доступно 0.") from exc
 
     logger.info(
         "stock_deduct_succeeded",
@@ -131,12 +143,15 @@ def restore_stock(
         # Берём последнюю партию в обратном FIFO-порядке (последней списывалась первой)
         # Включаем DEPLETED — возврат должен реактивировать опустошённую партию
         lot = (
-            StockLot.objects
-            .select_for_update()
-            .filter(org=org, product=product, status__in=[
-                StockLot.Status.ACTIVE,
-                StockLot.Status.DEPLETED,
-            ])
+            StockLot.objects.select_for_update()
+            .filter(
+                org=org,
+                product=product,
+                status__in=[
+                    StockLot.Status.ACTIVE,
+                    StockLot.Status.DEPLETED,
+                ],
+            )
             .order_by("-received_at", "-id")
             .first()
         )
@@ -150,10 +165,7 @@ def restore_stock(
                 quantity=str(quantity),
                 reason=reason,
             )
-            raise ValueError(
-                f"Нет партии для возврата товара '{product}'. "
-                f"Невозможно восстановить {quantity} единиц."
-            )
+            raise ValueError(f"Нет партии для возврата товара '{product}'. Невозможно восстановить {quantity} единиц.")
 
         lot.remaining_qty += quantity
         lot.status = StockLot.Status.ACTIVE

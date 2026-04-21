@@ -21,8 +21,8 @@ def _compute_vat_amount(*, gross: Decimal, vat_rate: Decimal) -> Decimal:
 
 # NineDigit item types are PascalCase (confirmed from Swagger sample)
 _ITEM_TYPE_MAP = {
-    "positive":   "Positive",
-    "returned":   "Returned",
+    "positive": "Positive",
+    "returned": "Returned",
     "correction": "Correction",
 }
 

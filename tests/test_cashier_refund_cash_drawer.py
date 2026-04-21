@@ -30,14 +30,22 @@ def _prepare_cashier_session(*, client, org, user) -> CashierSession:
 
 def _prepare_product(*, org) -> Product:
     from apps.inventory.services.receive_stock import receive_stock
+
     unit = Unit.objects.create(org=org, name="pcs")
     tax_rate = TaxRate.objects.create(org=org, name="VAT 23", rate=Decimal("23.00"))
     product = Product.objects.create(
-        org=org, name="Cola", unit=unit, tax_rate=tax_rate, unit_price=Decimal("2.00"),
+        org=org,
+        name="Cola",
+        unit=unit,
+        tax_rate=tax_rate,
+        unit_price=Decimal("2.00"),
     )
     receive_stock(
-        org=org, product=product,
-        initial_qty=Decimal("10.000"), unit_cost=Decimal("1.00"), label_code="LOT-COLA",
+        org=org,
+        product=product,
+        initial_qty=Decimal("10.000"),
+        unit_cost=Decimal("1.00"),
+        label_code="LOT-COLA",
     )
     return product
 
@@ -48,18 +56,25 @@ def _make_paid_order_with_cash_payment(*, org, product) -> Order:
 
     order = Order.objects.create(org=org, status=Order.STATUS_PAID)
     OrderItem.objects.create(
-        order=order, product=product, product_name=product.name,
-        qty=Decimal("1.000"), unit=product.unit,
-        unit_price=Decimal("2.00"), tax_rate=product.tax_rate,
+        order=order,
+        product=product,
+        product_name=product.name,
+        qty=Decimal("1.000"),
+        unit=product.unit,
+        unit_price=Decimal("2.00"),
+        tax_rate=product.tax_rate,
     )
     order.recompute_totals()
     order.save()
 
     OrderPayment.objects.create(
-        org=org, order=order,
+        org=org,
+        order=order,
         tender=OrderPayment.Tender.CASH,
         status=OrderPayment.Status.CAPTURED,
-        amount=order.total, currency="EUR", provider="manual",
+        amount=order.total,
+        currency="EUR",
+        provider="manual",
     )
     deduct_stock(org=org, product=product, quantity=Decimal("1.000"), reason="order_paid")
     return order
@@ -136,17 +151,24 @@ def test_card_refund_does_not_create_cash_out_movement(client, user_factory, org
 
     order = Order.objects.create(org=org, status=Order.STATUS_PAID)
     OrderItem.objects.create(
-        order=order, product=product, product_name=product.name,
-        qty=Decimal("1.000"), unit=product.unit,
-        unit_price=Decimal("2.00"), tax_rate=product.tax_rate,
+        order=order,
+        product=product,
+        product_name=product.name,
+        qty=Decimal("1.000"),
+        unit=product.unit,
+        unit_price=Decimal("2.00"),
+        tax_rate=product.tax_rate,
     )
     order.recompute_totals()
     order.save()
     OrderPayment.objects.create(
-        org=org, order=order,
+        org=org,
+        order=order,
         tender=OrderPayment.Tender.CARD,
         status=OrderPayment.Status.CAPTURED,
-        amount=order.total, currency="EUR", provider="manual",
+        amount=order.total,
+        currency="EUR",
+        provider="manual",
     )
     deduct_stock(org=org, product=product, quantity=Decimal("1.000"), reason="order_paid")
 
@@ -160,6 +182,8 @@ def test_card_refund_does_not_create_cash_out_movement(client, user_factory, org
 
 
 """Тест на правильность записи в базу при оплате наличными"""
+
+
 @pytest.mark.django_db
 def test_cash_payment_records_sale(client, user_factory, org_factory):
     from apps.accounting.models import AccountingEntry
@@ -187,7 +211,3 @@ def test_cash_payment_records_sale(client, user_factory, org_factory):
     ).first()
     assert entry is not None, "SALE_CASH entry should be created after cash payment"
     assert entry.amount == product.unit_price
-    
-    
-    
-    

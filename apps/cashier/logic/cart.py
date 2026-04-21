@@ -7,11 +7,11 @@ Cart and session-state helpers.
 - подсчёт totals
 - фильтрация продуктов для каталога
 """
+
 from __future__ import annotations
 
 import json
 from decimal import Decimal
-from typing import Dict, List
 
 from django.db.models import Q, Sum
 
@@ -29,7 +29,8 @@ SESSION_REFUND_ERROR = "cashier_refund_error"
 
 # ── Cart session helpers ─────────────────────────────────────────────────────
 
-def get_cart(session) -> Dict[str, int]:
+
+def get_cart(session) -> dict[str, int]:
     cart = session.get(SESSION_CART)
     if not isinstance(cart, dict):
         cart = {}
@@ -41,7 +42,7 @@ def reset_checkout_idempotency(session) -> None:
     session.pop(SESSION_CHECKOUT_IDEMPOTENCY, None)
 
 
-def cart_fingerprint(*, cart: Dict[str, int], tender: str) -> str:
+def cart_fingerprint(*, cart: dict[str, int], tender: str) -> str:
     if not cart:
         return ""
     items = [f"{product_id}:{qty}" for product_id, qty in sorted(cart.items())]
@@ -49,6 +50,7 @@ def cart_fingerprint(*, cart: Dict[str, int], tender: str) -> str:
 
 
 # ── Product catalog ──────────────────────────────────────────────────────────
+
 
 def get_products(org: Organization | None, query: str = "") -> list[Product]:
     """
@@ -61,19 +63,20 @@ def get_products(org: Organization | None, query: str = "") -> list[Product]:
         return Product.objects.none()
 
     qs = (
-        Product.objects
-        .filter(
+        Product.objects.filter(
             org=org,
             status=Product.STATUS_ACTIVE,
             unit__isnull=False,
             tax_rate__isnull=False,
-        ).exclude(product_type=Product.PRODUCT_TYPE_INGREDIENT)
+        )
+        .exclude(product_type=Product.PRODUCT_TYPE_INGREDIENT)
         .annotate(
             stock_qty_annotated=Sum(
                 "stock_lots__remaining_qty",
                 filter=Q(stock_lots__status="active"),
             )
-        ).prefetch_related("recipe__ingredients__product__stock_lots")
+        )
+        .prefetch_related("recipe__ingredients__product__stock_lots")
         .order_by("name")
     )
     if query:
@@ -93,6 +96,7 @@ def get_products(org: Organization | None, query: str = "") -> list[Product]:
 
 # ── Cart items and totals ────────────────────────────────────────────────────
 
+
 def get_product_unit_price(product: Product) -> Decimal:
     if product.is_bundle:
         return product.recompute_bundle_price()
@@ -108,19 +112,17 @@ def tax_included_amount(amount: Decimal, rate: Decimal) -> Decimal:
     return (amount - (amount / divisor)).quantize(Decimal("0.01"))
 
 
-def cart_items(cart: Dict[str, int], org: Organization | None) -> List[dict]:
+def cart_items(cart: dict[str, int], org: Organization | None) -> list[dict]:
     if not cart or not org:
         return []
 
     product_ids = [int(pid) for pid in cart.keys() if pid.isdigit()]
     products_by_id = {
         str(product.id): product
-        for product in Product.objects.filter(org=org, id__in=product_ids).prefetch_related(
-            "bundle_items__component"
-        )
+        for product in Product.objects.filter(org=org, id__in=product_ids).prefetch_related("bundle_items__component")
     }
 
-    items: List[dict] = []
+    items: list[dict] = []
     for product_id, qty in cart.items():
         product = products_by_id.get(product_id)
         if not product:
@@ -141,7 +143,7 @@ def cart_items(cart: Dict[str, int], org: Organization | None) -> List[dict]:
     return items
 
 
-def cart_totals(items: List[dict]) -> dict:
+def cart_totals(items: list[dict]) -> dict:
     subtotal = sum((item["line_total"] for item in items), Decimal("0.00"))
     tax_total = sum((item["tax_amount"] for item in items), Decimal("0.00"))
     return {
@@ -151,9 +153,10 @@ def cart_totals(items: List[dict]) -> dict:
     }
 
 
-def build_cart_context(cart: Dict[str, int], org: Organization, **extra) -> dict:
+def build_cart_context(cart: dict[str, int], org: Organization, **extra) -> dict:
     """Собирает стандартный контекст для cart-партиалов."""
     from django.conf import settings
+
     items = cart_items(cart, org)
     totals = cart_totals(items)
     return {
@@ -166,7 +169,7 @@ def build_cart_context(cart: Dict[str, int], org: Organization, **extra) -> dict
     }
 
 
-def restore_cart_from_payload(raw: str, org: Organization) -> Dict[str, int]:
+def restore_cart_from_payload(raw: str, org: Organization) -> dict[str, int]:
     """
     Восстанавливает корзину из JSON-строки [{id, qty}, ...].
     Валидирует каждый продукт (существование, unit, tax_rate).
@@ -176,7 +179,7 @@ def restore_cart_from_payload(raw: str, org: Organization) -> Dict[str, int]:
     except (json.JSONDecodeError, ValueError):
         items_data = []
 
-    cart: Dict[str, int] = {}
+    cart: dict[str, int] = {}
     for entry in items_data:
         try:
             product_id = int(entry.get("id", 0))

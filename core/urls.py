@@ -8,9 +8,9 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from core.views import HealthView, home_view
 
 urlpatterns = [
-    path('', home_view, name='home'),
-    path('admin/', admin.site.urls),
-    path('health', HealthView.as_view(), name='health'),
+    path("", home_view, name="home"),
+    path("admin/", admin.site.urls),
+    path("health", HealthView.as_view(), name="health"),
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
     path("api/v1/auth/", include("config.users.urls")),
@@ -23,8 +23,6 @@ urlpatterns = [
     path("cashier/", include("apps.cashier.urls")),
     path("", include("apps.ops_dashboard.urls")),
     path("ops/logs/", include("apps.logs_dashboard.urls")),
-
-
 ]
 
 if settings.DEBUG:

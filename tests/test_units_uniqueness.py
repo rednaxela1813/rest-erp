@@ -7,6 +7,7 @@ def test_cannot_create_duplicate_active_unit_name_in_same_org(admin_client):
     client, admin, org = admin_client
 
     from apps.products.models import Unit
+
     Unit.objects.create(org=org, name="pcs", status=Unit.STATUS_ACTIVE)
 
     resp = client.post(

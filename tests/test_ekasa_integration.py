@@ -6,6 +6,7 @@ Skipped by default. Run explicitly:
 
 Requires NineDigit running locally and EKASA_CASH_REGISTER_CODE set in .env.
 """
+
 import json
 import os
 import re
@@ -86,8 +87,7 @@ def test_register_cash_register_real_call(settings):
     print("-----------------------------\n")
 
     assert response.get("isSuccessful") is True, (
-        f"Expected isSuccessful=True, got: {response.get('isSuccessful')}\n"
-        f"error: {response.get('error')}"
+        f"Expected isSuccessful=True, got: {response.get('isSuccessful')}\nerror: {response.get('error')}"
     )
 
     receipt_id = extract_receipt_reference(response)

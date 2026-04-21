@@ -1,3 +1,6 @@
+import logging
+
+
 SENSITIVE_FRAGMENTS = (
     "password",
     "token",
@@ -42,9 +45,6 @@ class AppsOnlyFilter:
         return name.startswith("apps.") or name.startswith("config.") or name.startswith("core.")
 
 
-import logging
-
-
 class DBLogHandler(logging.Handler):
     """
     Logging handler that persists structured logs into the database.
@@ -56,6 +56,7 @@ class DBLogHandler(logging.Handler):
     def emit(self, record):
         try:
             from django.apps import apps as django_apps
+
             if not django_apps.ready:
                 return
             LogEntry = django_apps.get_model("logs_dashboard", "LogEntry")

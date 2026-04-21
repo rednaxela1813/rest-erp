@@ -11,7 +11,7 @@ def test_order_created_with_default_status_draft(admin_client):
 
     data = resp.json()
     assert data["status"] == "draft"
-    
+
 
 def test_cannot_add_item_to_paid_order(admin_client):
     client, user, org = admin_client
@@ -67,8 +67,3 @@ def test_cannot_add_item_to_cancelled_order(admin_client):
     )
 
     assert resp.status_code == 400
-
-
-
-
-

@@ -9,7 +9,6 @@ from config.orgs.models import Organization
 from django.db.models import F
 
 
-
 from apps.accounting.logic.record_sale import record_sale
 from apps.orders.logic.finalize_paid_order import finalize_paid_order
 from apps.payments.logic.device_commands import (
@@ -32,6 +31,7 @@ def _finalize_sale_after_fiscal_confirmation(*, payment: OrderPayment) -> None:
         finalize_paid_order(order=order, actor=None)
         order.refresh_from_db(fields=["status", "updated_at"])
     record_sale(order=order, tender=payment.tender)
+
 
 @shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=3)
 def dispatch_device_commands(self, org_id: int, limit: int = 50) -> dict:
@@ -109,9 +109,7 @@ def _hard_fail_command(*, command: DeviceCommand, error: str) -> None:
     command.last_error = error
     command.retries = command.max_retries
     command.next_attempt_at = None
-    command.save(
-        update_fields=["status", "last_error", "retries", "next_attempt_at", "updated_at"]
-    )
+    command.save(update_fields=["status", "last_error", "retries", "next_attempt_at", "updated_at"])
 
 
 def _ensure_fiscal_receipt(*, command: DeviceCommand, raw_payload: dict | None = None) -> None:
@@ -532,13 +530,14 @@ def reconcile_payment_fiscal_status_for_all_orgs(self, limit: int = 200) -> dict
         DeviceCommand.Type.FISCALIZE_STORNO,
     ]
     candidate_payments = (
-        OrderPayment.objects
-        .filter(device_commands__command_type__in=fiscal_types)
-        .filter(device_commands__status__in=[
-            DeviceCommand.Status.PENDING,
-            DeviceCommand.Status.SENT,
-            DeviceCommand.Status.FAILED,
-        ])
+        OrderPayment.objects.filter(device_commands__command_type__in=fiscal_types)
+        .filter(
+            device_commands__status__in=[
+                DeviceCommand.Status.PENDING,
+                DeviceCommand.Status.SENT,
+                DeviceCommand.Status.FAILED,
+            ]
+        )
         .distinct()
         .order_by("id")[:limit]
     )

@@ -4,15 +4,18 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('products', '0001_initial'),
+        ("products", "0001_initial"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='product',
-            name='product_type',
-            field=models.CharField(choices=[('simple', 'Simple'), ('ingredient', 'Ingredient'), ('prepared', 'Prepared')], default='simple', max_length=16),
+            model_name="product",
+            name="product_type",
+            field=models.CharField(
+                choices=[("simple", "Simple"), ("ingredient", "Ingredient"), ("prepared", "Prepared")],
+                default="simple",
+                max_length=16,
+            ),
         ),
     ]

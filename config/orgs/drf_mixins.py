@@ -10,6 +10,8 @@ class OrgScopedQuerysetMixin:
     def get_queryset(self):
         qs = super().get_queryset()
         org = get_request_org(self.request)
+        if hasattr(qs, "for_org"):
+            return qs.for_org(org)
         return qs.filter(org=org)
 
     def perform_create(self, serializer):

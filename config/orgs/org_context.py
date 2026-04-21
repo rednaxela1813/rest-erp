@@ -14,7 +14,7 @@ def get_request_org(request):
         org = Organization.objects.get(public_id=org_id)
     except Organization.DoesNotExist:
         # можно 404, но для безопасности чаще 404
-        raise PermissionDenied("Organization not accessible")
+        raise PermissionDenied("Organization not accessible") from None
 
     is_member = OrganizationMember.objects.filter(org=org, user=request.user).exists()
     if not is_member:

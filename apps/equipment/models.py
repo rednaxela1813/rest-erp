@@ -22,12 +22,12 @@ class Equipment(OrgScopedModel):
     power_kw = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)  # Power consumption in kW
     last_maintenance_date = models.DateField(null=True, blank=True)
     maintenance_interval_months = models.PositiveIntegerField(null=True, blank=True)  # Months between maintenance
-    
+
     def next_maintenance_date(self):
         if self.last_maintenance_date and self.maintenance_interval_months:
             return self.last_maintenance_date + relativedelta(months=self.maintenance_interval_months)
         return None
-    
+
     class Meta:
         ordering = ["id"]
 

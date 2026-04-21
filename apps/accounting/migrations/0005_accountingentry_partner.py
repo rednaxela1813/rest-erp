@@ -5,16 +5,21 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('accounting', '0004_accountingentry_export_status_and_more'),
-        ('partners', '0001_initial'),
+        ("accounting", "0004_accountingentry_export_status_and_more"),
+        ("partners", "0001_initial"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='accountingentry',
-            name='partner',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='accounting_entries', to='partners.partner'),
+            model_name="accountingentry",
+            name="partner",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name="accounting_entries",
+                to="partners.partner",
+            ),
         ),
     ]

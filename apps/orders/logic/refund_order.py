@@ -12,6 +12,7 @@ from apps.payments.models import FiscalReceipt, OrderPayment
 
 logger = structlog.get_logger(__name__)
 
+
 def refund_paid_order(*, order: Order, actor=None) -> FiscalReceipt:
     """
     Use-case: refund a paid order.
@@ -26,8 +27,7 @@ def refund_paid_order(*, order: Order, actor=None) -> FiscalReceipt:
     # Idempotency: if order already cancelled and refund receipt exists, return it.
     if order.status == Order.STATUS_CANCELLED:
         existing = (
-            FiscalReceipt.objects
-            .filter(order=order, receipt_type=FiscalReceipt.Type.REFUND)
+            FiscalReceipt.objects.filter(order=order, receipt_type=FiscalReceipt.Type.REFUND)
             .order_by("-created_at")
             .first()
         )
@@ -39,11 +39,7 @@ def refund_paid_order(*, order: Order, actor=None) -> FiscalReceipt:
         raise ValidationError({"order": ["Only paid orders can be refunded."]})
 
     # Find the latest captured payment to link refund receipt.
-    payment = (
-        order.payments.filter(status=OrderPayment.Status.CAPTURED)
-        .order_by("-created_at")
-        .first()
-    )
+    payment = order.payments.filter(status=OrderPayment.Status.CAPTURED).order_by("-created_at").first()
     if payment is None:
         raise ValidationError({"payment": ["Captured payment is required for refund."]})
 
@@ -70,8 +66,7 @@ def refund_paid_order(*, order: Order, actor=None) -> FiscalReceipt:
 
         # Use the original eKasa receipt reference if available.
         sale_receipt = (
-            FiscalReceipt.objects
-            .filter(payment=payment, receipt_type=FiscalReceipt.Type.SALE)
+            FiscalReceipt.objects.filter(payment=payment, receipt_type=FiscalReceipt.Type.SALE)
             .order_by("-created_at")
             .first()
         )

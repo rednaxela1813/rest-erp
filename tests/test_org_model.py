@@ -3,7 +3,6 @@ import pytest
 pytestmark = pytest.mark.django_db
 
 
-
 def test_org_has_public_id_uuid():
     from config.orgs.models import Organization
 

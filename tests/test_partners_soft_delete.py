@@ -7,6 +7,7 @@ def test_delete_archives_partner_and_list_hides_it(admin_client):
     client, admin, org = admin_client
 
     from apps.partners.models import Partner
+
     p = Partner.objects.create(org=org, name="To archive")
 
     resp = client.delete(f"/api/v1/partners/{p.public_id}/")

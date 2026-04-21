@@ -1,7 +1,5 @@
-from decimal import Decimal
-
-from django.contrib import admin
 from django import forms
+from django.contrib import admin
 
 from .models import BundleItem, Product, TaxRate, Unit
 
@@ -16,21 +14,17 @@ class BundleItemInline(admin.TabularInline):
 class ProductAdminForm(forms.ModelForm):
     class Meta:
         model = Product
-        fields = "__all__"
+        exclude: list[str] = []
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         org_id = self._resolve_org_id()
 
         if "unit" in self.fields:
-            unit_qs = Unit.objects.all()
-            self.fields["unit"].queryset = (
-                unit_qs.filter(org_id=org_id) if org_id else unit_qs.none()
-            )
+            self.fields["unit"].queryset = Unit.objects.filter(org_id=org_id) if org_id else Unit.objects.none()
         if "tax_rate" in self.fields:
-            tax_qs = TaxRate.objects.all()
             self.fields["tax_rate"].queryset = (
-                tax_qs.filter(org_id=org_id) if org_id else tax_qs.none()
+                TaxRate.objects.filter(org_id=org_id) if org_id else TaxRate.objects.none()
             )
 
     def _resolve_org_id(self):
@@ -65,13 +59,10 @@ class ProductAdmin(admin.ModelAdmin):
         "unit",
         "tax_rate",
         "product_type",
-       
     )
     search_fields = ("name", "barcode", "org__name")
     list_filter = ("status", "tax_rate", "is_bundle", "requires_preparation")
     inlines = [BundleItemInline]
-
-    
 
     def save_related(self, request, form, formsets, change):
         super().save_related(request, form, formsets, change)

@@ -134,9 +134,7 @@ class DeviceCommandSerializer(serializers.ModelSerializer):
 
 
 class DeviceCommandAckSerializer(serializers.Serializer):
-    status = serializers.ChoiceField(
-        choices=[DeviceCommand.Status.ACKED, DeviceCommand.Status.FAILED]
-    )
+    status = serializers.ChoiceField(choices=[DeviceCommand.Status.ACKED, DeviceCommand.Status.FAILED])
     error = serializers.CharField(required=False, allow_blank=True)
 
 
@@ -212,12 +210,7 @@ class PaymentStatusApi(APIView):
             DeviceCommand.Status.ACKED: 0,
             DeviceCommand.Status.FAILED: 0,
         }
-        for row in (
-            DeviceCommand.objects
-            .filter(payment=payment)
-            .values("status")
-            .annotate(count=Count("id"))
-        ):
+        for row in DeviceCommand.objects.filter(payment=payment).values("status").annotate(count=Count("id")):
             counts[row["status"]] = row["count"]
 
         return Response(
@@ -233,20 +226,14 @@ class PaymentStatusApi(APIView):
 
 
 class PaymentManualResolutionSerializer(serializers.Serializer):
-    capture_status = serializers.ChoiceField(
-        choices=OrderPayment.CaptureStatus.choices, required=False
-    )
-    fiscal_status = serializers.ChoiceField(
-        choices=OrderPayment.FiscalStatus.choices, required=False
-    )
+    capture_status = serializers.ChoiceField(choices=OrderPayment.CaptureStatus.choices, required=False)
+    fiscal_status = serializers.ChoiceField(choices=OrderPayment.FiscalStatus.choices, required=False)
     failure_reason = serializers.CharField(required=False, allow_blank=True)
 
     def validate(self, attrs):
         if not attrs:
             logger.warning("payment_manual_resolution_empty_payload")
-            raise serializers.ValidationError(
-                {"detail": ["At least one field is required."]}
-            )
+            raise serializers.ValidationError({"detail": ["At least one field is required."]})
         return attrs
 
 
@@ -481,8 +468,7 @@ class ShiftReportApi(APIView):
                     "tax_total": str(totals["tax_total"]),
                     "by_tender": {k: str(v) for k, v in totals["by_tender"].items()},
                     "by_tax_rate": [
-                        {"rate": item["rate"], "tax_total": str(item["tax_total"])}
-                        for item in totals["by_tax_rate"]
+                        {"rate": item["rate"], "tax_total": str(item["tax_total"])} for item in totals["by_tax_rate"]
                     ],
                 },
             }

@@ -4,20 +4,28 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('accounting', '0003_accountingentry_note'),
+        ("accounting", "0003_accountingentry_note"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='accountingentry',
-            name='export_status',
-            field=models.CharField(choices=[('pending', 'Ожидает экспорта'), ('exported', 'Экспортировано'), ('failed', 'Ошибка экспорта')], db_index=True, default='pending', max_length=16),
+            model_name="accountingentry",
+            name="export_status",
+            field=models.CharField(
+                choices=[
+                    ("pending", "Ожидает экспорта"),
+                    ("exported", "Экспортировано"),
+                    ("failed", "Ошибка экспорта"),
+                ],
+                db_index=True,
+                default="pending",
+                max_length=16,
+            ),
         ),
         migrations.AddField(
-            model_name='accountingentry',
-            name='exported_at',
+            model_name="accountingentry",
+            name="exported_at",
             field=models.DateTimeField(blank=True, null=True),
         ),
     ]

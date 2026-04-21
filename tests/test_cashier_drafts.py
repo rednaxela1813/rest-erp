@@ -44,6 +44,7 @@ def _prepare_cashier_session(*, client, org, user) -> CashierSession:
 
 def _prepare_product(*, org) -> Product:
     from apps.inventory.services.receive_stock import receive_stock
+
     unit = Unit.objects.create(org=org, name="pcs")
     tax_rate = TaxRate.objects.create(org=org, name="VAT 20", rate=Decimal("20.00"))
     product = Product.objects.create(
@@ -53,7 +54,9 @@ def _prepare_product(*, org) -> Product:
         tax_rate=tax_rate,
         unit_price=Decimal("5.00"),
     )
-    receive_stock(org=org, product=product, initial_qty=Decimal("10.000"), unit_cost=Decimal("1.00"), label_code="LOT-BURGER")
+    receive_stock(
+        org=org, product=product, initial_qty=Decimal("10.000"), unit_cost=Decimal("1.00"), label_code="LOT-BURGER"
+    )
     return product
 
 
@@ -176,32 +179,45 @@ def test_cashier_home_shows_shift_sales_total(client, user_factory, org_factory)
 
     # Считается: наличные в текущей смене
     OrderPayment.objects.create(
-        org=org, order=order_1, terminal=session.terminal,
+        org=org,
+        order=order_1,
+        terminal=session.terminal,
         tender=OrderPayment.Tender.CASH,
         status=OrderPayment.Status.CAPTURED,
-        amount=Decimal("10.00"), currency="EUR", provider="manual",
+        amount=Decimal("10.00"),
+        currency="EUR",
+        provider="manual",
         captured_at=timezone.now(),
     )
     # Считается: карта в текущей смене
     OrderPayment.objects.create(
-        org=org, order=order_2, terminal=session.terminal,
+        org=org,
+        order=order_2,
+        terminal=session.terminal,
         tender=OrderPayment.Tender.CARD,
         status=OrderPayment.Status.CAPTURED,
-        amount=Decimal("7.50"), currency="EUR", provider="manual",
+        amount=Decimal("7.50"),
+        currency="EUR",
+        provider="manual",
         captured_at=timezone.now(),
     )
     # Не считается: платёж ДО открытия смены
     OrderPayment.objects.create(
-        org=org, order=order_3, terminal=session.terminal,
+        org=org,
+        order=order_3,
+        terminal=session.terminal,
         tender=OrderPayment.Tender.CASH,
         status=OrderPayment.Status.CAPTURED,
-        amount=Decimal("50.00"), currency="EUR", provider="manual",
+        amount=Decimal("50.00"),
+        currency="EUR",
+        provider="manual",
         captured_at=session.opened_at - timezone.timedelta(hours=1),
     )
 
     resp = client.get("/cashier/")
     assert resp.status_code == 200
     assert b"Shift sales 17.50" in resp.content
+
 
 @pytest.mark.django_db
 def test_logout_closes_open_shift_with_current_cash(client, user_factory, org_factory):
@@ -262,6 +278,7 @@ def test_cashier_refund_paid_order_enqueues_refund_command(client, user_factory,
 
     # Simulate existing sale receipt reference required for refund payload.
     from apps.payments.models import FiscalReceipt
+
     FiscalReceipt.objects.get_or_create(
         payment=payment,
         receipt_type=FiscalReceipt.Type.SALE,

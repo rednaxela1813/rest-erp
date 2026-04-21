@@ -1,4 +1,4 @@
-#apps/partners/api_views.py
+# apps/partners/api_views.py
 from rest_framework import generics
 from rest_framework.permissions import IsAuthenticated
 
@@ -19,8 +19,7 @@ class PartnerListCreateApi(generics.ListCreateAPIView):
 
     def get_queryset(self):
         org = get_request_org(self.request)
-        return Partner.objects.filter(org=org, status=Partner.STATUS_ACTIVE).order_by("id")
-
+        return Partner.objects.for_org(org).filter(status=Partner.STATUS_ACTIVE).order_by("id")
 
     def perform_create(self, serializer):
         org = get_request_org(self.request)
@@ -35,8 +34,8 @@ class PartnerDetailApi(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         org = get_request_org(self.request)
-        return Partner.objects.filter(org=org)
-    
+        return Partner.objects.for_org(org)
+
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
         instance.status = Partner.STATUS_ARCHIVED

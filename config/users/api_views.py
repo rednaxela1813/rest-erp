@@ -3,6 +3,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
+from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
@@ -45,7 +46,7 @@ class LogoutView(APIView):
         try:
             token = RefreshToken(refresh)
             token.blacklist()
-        except Exception:
-            return Response({"detail": "invalid token"}, status=status.HTTP_400_BAD_REQUEST)
+        except (InvalidToken, TokenError) as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(status=status.HTTP_205_RESET_CONTENT)

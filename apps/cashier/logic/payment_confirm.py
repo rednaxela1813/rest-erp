@@ -6,6 +6,7 @@ _confirm_cash_payment и _confirm_card_payment — это UI-специфичн�
 о CashDrawerMovement, CashierSession и receipt-sending — вещах специфичных для
 кассового экрана.
 """
+
 from __future__ import annotations
 
 import structlog
@@ -30,6 +31,7 @@ def trigger_ekasa_processing(org_id: int) -> None:
     if not settings.EKASA_ENABLED:
         return
     from apps.payments.tasks import process_device_commands_ekasa
+
     process_device_commands_ekasa.delay(org_id=org_id, limit=50)
 
 
@@ -38,9 +40,7 @@ def send_receipts(*, order, payment: OrderPayment, session: CashierSession) -> N
     send_fiscal_receipt(order=order, payment=payment, session=session)
 
 
-def confirm_cash_payment(
-    *, payment: OrderPayment, actor, session: CashierSession
-) -> OrderPayment:
+def confirm_cash_payment(*, payment: OrderPayment, actor, session: CashierSession) -> OrderPayment:
     """
     Подтверждает наличную оплату:
     1. Переводит payment в CAPTURED
@@ -87,9 +87,7 @@ def confirm_cash_payment(
     return payment
 
 
-def confirm_card_payment(
-    *, payment: OrderPayment, actor, session: CashierSession
-) -> OrderPayment:
+def confirm_card_payment(*, payment: OrderPayment, actor, session: CashierSession) -> OrderPayment:
     """
     Подтверждает карточную оплату через authorize → capture цепочку.
     Отправляет чек после успешного capture.
@@ -99,9 +97,7 @@ def confirm_card_payment(
 
     if payment.status == OrderPayment.Status.PENDING:
         try:
-            authorize_payment(
-                payment=payment, actor=actor, terminal=session.terminal, session=session
-            )
+            authorize_payment(payment=payment, actor=actor, terminal=session.terminal, session=session)
             payment.refresh_from_db()
         except ValidationError as exc:
             payment.status = OrderPayment.Status.FAILED
@@ -132,6 +128,7 @@ def create_payment(
 ) -> OrderPayment:
     """Создаёт OrderPayment в статусе PENDING."""
     from django.conf import settings
+
     return OrderPayment.objects.create(
         org=order.org,
         order=order,

@@ -1,4 +1,3 @@
-
 # apps/orders/models.py
 from __future__ import annotations
 from django.db import models
@@ -31,12 +30,11 @@ class Order(OrgScopedModel):
         choices=STATUS_CHOICES,
         default=STATUS_DRAFT,
     )
-    
-    
+
     subtotal = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
     tax_total = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
     total = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
-    
+
     def recompute_totals(self) -> None:
         """
         Prices are VAT-inclusive: subtotal = sum(qty * unit_price),
@@ -64,14 +62,12 @@ class Order(OrgScopedModel):
         self.subtotal = subtotal.quantize(Decimal("0.01"))
         self.tax_total = tax_total.quantize(Decimal("0.01"))
         self.total = self.subtotal
-        
-        
+
     class Meta:
         ordering = ["id"]
 
     def __str__(self) -> str:
         return f"Order {self.public_id}"
-
 
 
 class OrderItem(models.Model):
@@ -82,8 +78,10 @@ class OrderItem(models.Model):
         on_delete=models.CASCADE,
         related_name="items",
     )
-    
-    product = models.ForeignKey("products.Product", on_delete=models.PROTECT, related_name="order_items", null=True, blank=True)
+
+    product = models.ForeignKey(
+        "products.Product", on_delete=models.PROTECT, related_name="order_items", null=True, blank=True
+    )
 
     product_name = models.CharField(max_length=255)
     qty = models.DecimalField(max_digits=12, decimal_places=3, default=Decimal("1.000"))
@@ -138,11 +136,6 @@ class OrderItemAddon(models.Model):
 
     class Meta:
         ordering = ["id"]
-    
-    
-
-
-
 
 
 class OrderStatusEvent(models.Model):

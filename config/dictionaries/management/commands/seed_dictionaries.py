@@ -4,7 +4,6 @@ from django.db import transaction
 from config.dictionaries.models import Country, Currency
 
 
-
 class Command(BaseCommand):
     help = "Seed base dictionaries (currencies, countries). Safe to run multiple times."
 

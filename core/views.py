@@ -13,7 +13,4 @@ class HealthView(APIView):
 
 def home_view(request):
     """Main landing page with navigation to cashier and dashboard."""
-    return render(request, 'index.html')
-
-
-
+    return render(request, "index.html")

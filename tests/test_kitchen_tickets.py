@@ -20,9 +20,7 @@ def _create_kitchen_ticket(*, org, order, product, qty=Decimal("1.000"), status=
     )
 
 
-def test_paid_order_with_prep_product_creates_kitchen_ticket(
-    admin_client, payment_factory, capture_payment_api
-):
+def test_paid_order_with_prep_product_creates_kitchen_ticket(admin_client, payment_factory, capture_payment_api):
     client, user, org = admin_client
 
     from apps.orders.models import KitchenTicket, Order

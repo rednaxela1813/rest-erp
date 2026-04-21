@@ -19,6 +19,7 @@ def test_org_admin_can_create_unit(admin_client):
     assert "id" not in data
 
     from apps.products.models import Unit
+
     assert Unit.objects.filter(org=org, name="pcs", status=Unit.STATUS_ACTIVE).exists()
 
 

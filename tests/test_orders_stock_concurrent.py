@@ -34,6 +34,7 @@ from config.orgs.models import Organization
 # Важно: НЕ пытаться удалять объекты вручную в teardown — из-за on_delete=PROTECT
 # это сломает уборку. pytest-django сам всё почистит.
 
+
 @pytest.fixture
 def org(transactional_db):
     return Organization.objects.create(name="Concurrent Test Org")
@@ -71,9 +72,9 @@ def test_concurrent_deduct_only_one_succeeds(product_with_one_unit, org):
     - итоговый remaining_qty партии == 0, не -1
     """
     product = product_with_one_unit
-    results = []        # сюда каждый поток запишет "ok" или "insufficient_stock"
+    results = []  # сюда каждый поток запишет "ok" или "insufficient_stock"
     results_lock = threading.Lock()  # потокобезопасная запись в общий список
-    barrier = threading.Barrier(2)   # барьер синхронизирует старт обоих потоков
+    barrier = threading.Barrier(2)  # барьер синхронизирует старт обоих потоков
 
     def try_deduct():
         # Оба потока доходят до барьера и стартуют одновременно
@@ -104,9 +105,7 @@ def test_concurrent_deduct_only_one_succeeds(product_with_one_unit, org):
 
     # Остаток должен быть ровно 0, не отрицательным
     lot = StockLot.objects.get(org=org, product=product)
-    assert lot.remaining_qty == Decimal("0.000"), (
-        f"remaining_qty should be 0, got {lot.remaining_qty}"
-    )
+    assert lot.remaining_qty == Decimal("0.000"), f"remaining_qty should be 0, got {lot.remaining_qty}"
     assert lot.status == StockLot.Status.DEPLETED
 
 

@@ -4,6 +4,7 @@ DEBUG = False
 
 MIDDLEWARE = [  # noqa: F405
     "whitenoise.middleware.WhiteNoiseMiddleware",
+    "config.security.BrowserSecurityHeadersMiddleware",
     *MIDDLEWARE,  # noqa: F405
 ]
 

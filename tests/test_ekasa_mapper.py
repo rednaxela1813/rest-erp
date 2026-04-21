@@ -23,7 +23,7 @@ def test_build_cash_register_request_sale():
                     "tax_rate": "20.00",
                     "unit": "pcs",
                 }
-            ]
+            ],
         },
     )
 
@@ -61,7 +61,7 @@ def test_build_cash_register_request_card_payment_name():
                     "tax_rate": "20.00",
                     "unit": "pcs",
                 }
-            ]
+            ],
         },
     )
 

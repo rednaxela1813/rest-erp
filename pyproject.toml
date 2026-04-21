@@ -1,0 +1,58 @@
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "PL", "RUF", "DJ"]
+ignore = ["B904", "DJ001", "DJ007", "DJ008", "DJ012", "E203", "I001", "PLR0911", "PLR0912", "PLR0913", "PLR0915", "RUF001", "RUF012", "RUF002", "RUF003", "UP009", "UP035"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*.py" = ["B017", "E501", "F401", "F811", "F841", "I001", "PLR0402", "PLR0913", "PLR2004", "RUF002", "RUF003", "UP012"]
+"apps/*/tests/*.py" = ["B017", "E501", "F401", "F811", "F841", "I001", "PLR0402", "PLR0913", "PLR2004", "RUF002", "RUF003", "UP012"]
+"apps/*/models.py" = ["F401"]
+"*/admin.py" = ["I001"]
+"*/urls.py" = ["I001"]
+"*/views.py" = ["F401", "I001"]
+"*/tests.py" = ["F401"]
+"conftest.py" = ["F401"]
+"core/settings/*.py" = ["F403", "F405", "I001", "RUF100"]
+"config/*/migrations/*.py" = ["E501", "I001", "RUF012"]
+"apps/*/migrations/*.py" = ["E501", "I001", "RUF012"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = false
+plugins = ["mypy_django_plugin.main"]
+ignore_missing_imports = true
+disallow_untyped_defs = false
+check_untyped_defs = false
+warn_return_any = false
+disallow_any_generics = false
+exclude = "(^conftest\\.py$|^tests/conftest\\.py$|^tests/|.*/tests/|.*/migrations/|.*/admin\\.py$|.*/urls\\.py$|.*/views\\.py$)"
+
+[[tool.mypy.overrides]]
+module = [
+  "apps.cashier.logic.*",
+  "apps.cashier.views",
+  "apps.equipment.models",
+  "apps.logs_dashboard.*",
+  "apps.ops_dashboard.views",
+  "apps.orders.api_views",
+  "apps.partners.api_views",
+  "apps.payments.api_views",
+  "apps.payments.providers.*",
+  "apps.payments.streaming",
+  "apps.payments.tasks",
+  "apps.products.api_views",
+  "apps.products.serializers",
+  "config.observability.*",
+  "config.orgs.*",
+  "config.security",
+  "config.users.*",
+  "core.celery",
+  "core.settings.*",
+]
+ignore_errors = true
+
+[tool.django-stubs]
+django_settings_module = "core.settings.dev"

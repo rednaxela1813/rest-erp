@@ -5,7 +5,6 @@ from .models import Country, Currency
 from .serializers import CountrySerializer, CurrencySerializer
 
 
-
 class CurrencyListView(ListAPIView):
     # intentionally public: cashier/bootstrap clients need currency metadata before user login
     permission_classes = [AllowAny]

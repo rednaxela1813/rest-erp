@@ -14,6 +14,7 @@ pytestmark = pytest.mark.django_db
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_product(*, org, name="Булочки") -> Product:
     unit = Unit.objects.create(org=org, name=f"{name}-unit")
     tax_rate = TaxRate.objects.create(org=org, name=f"{name}-tax", rate=Decimal("20.00"))
@@ -29,6 +30,7 @@ def _make_product(*, org, name="Булочки") -> Product:
 # ---------------------------------------------------------------------------
 # Тесты
 # ---------------------------------------------------------------------------
+
 
 def test_receive_stock_creates_accounting_entry(org_factory):
     # При приходе товара должна создаться бухгалтерская запись

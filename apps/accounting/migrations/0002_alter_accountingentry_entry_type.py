@@ -4,15 +4,22 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('accounting', '0001_initial'),
+        ("accounting", "0001_initial"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='accountingentry',
-            name='entry_type',
-            field=models.CharField(choices=[('sale', 'Продажа'), ('refund', 'Возврат'), ('stock_receipt', 'Приход товара'), ('payment_out', 'Оплата поставщику')], max_length=32),
+            model_name="accountingentry",
+            name="entry_type",
+            field=models.CharField(
+                choices=[
+                    ("sale", "Продажа"),
+                    ("refund", "Возврат"),
+                    ("stock_receipt", "Приход товара"),
+                    ("payment_out", "Оплата поставщику"),
+                ],
+                max_length=32,
+            ),
         ),
     ]

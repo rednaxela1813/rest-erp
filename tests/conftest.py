@@ -23,6 +23,7 @@ def user_factory(db):
     Создаёт пользователя с заданным email/паролем.
     Возвращает объект user.
     """
+
     def _make_user(email: str, password: str = "pass12345", **kwargs):
         User = get_user_model()
 
@@ -54,6 +55,7 @@ def auth_client(api_client, user_factory):
     Возвращает (client, user) с установленным Authorization: Bearer <access>.
     Аутентификация строго как в проде — через JWT login endpoint.
     """
+
     def _login(email: str = "a@example.com", password: str = "pass12345", **user_kwargs):
         user = user_factory(email=email, password=password, **user_kwargs)
 
@@ -99,6 +101,7 @@ def set_org_header():
     """
     Устанавливает активную org в клиент через X-ORG-ID.
     """
+
     def _set(client, org):
         # Django test client читает заголовки так:
         # X-ORG-ID -> HTTP_X_ORG_ID
@@ -109,6 +112,7 @@ def set_org_header():
 
 
 # === УДОБНЫЕ ГОТОВЫЕ ФИКСТУРЫ ДЛЯ РОЛЕЙ ===
+
 
 @pytest.fixture
 def owner_client(auth_client, org_factory, member_factory, set_org_header):
@@ -142,7 +146,9 @@ def member_client(auth_client, org_factory, member_factory, set_org_header):
 
 @pytest.fixture
 def payment_factory(db):
-    def _make_payment(*, order, org, amount=Decimal("0.00"), status=None, tender=None, currency="EUR", provider="manual"):
+    def _make_payment(
+        *, order, org, amount=Decimal("0.00"), status=None, tender=None, currency="EUR", provider="manual"
+    ):
         from apps.payments.models import OrderPayment
 
         return OrderPayment.objects.create(

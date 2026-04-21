@@ -50,3 +50,6 @@ celerybeat.pid
 celerybeat-schedule
 celerybeat-schedule-*
 *.db-journal
+
+# Celery Beat state
+celerybeat-schedule*

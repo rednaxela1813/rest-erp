@@ -13,6 +13,7 @@ def test_org_admin_can_remove_member(admin_client, user_factory, member_factory)
     assert resp.status_code in (204, 200), resp.content
 
     from config.orgs.models import OrganizationMember
+
     assert not OrganizationMember.objects.filter(id=m.id).exists()
 
 

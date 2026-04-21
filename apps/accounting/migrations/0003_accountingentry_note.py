@@ -4,15 +4,14 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('accounting', '0002_alter_accountingentry_entry_type'),
+        ("accounting", "0002_alter_accountingentry_entry_type"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='accountingentry',
-            name='note',
-            field=models.TextField(blank=True, default=''),
+            model_name="accountingentry",
+            name="note",
+            field=models.TextField(blank=True, default=""),
         ),
     ]

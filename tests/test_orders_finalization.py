@@ -3,6 +3,7 @@ from decimal import Decimal
 
 pytestmark = pytest.mark.django_db
 
+
 def test_cannot_set_paid_order_without_items(admin_client, payment_factory, capture_payment_api):
     client, user, org = admin_client
     from apps.orders.models import Order

@@ -17,7 +17,9 @@ def test_capture_payment_calls_provider_and_sets_status_captured(admin_client, m
     product = Product.objects.create(org=org, name="Cola", status=Product.STATUS_ACTIVE)
     unit = Unit.objects.create(org=org, name="pcs", status=Unit.STATUS_ACTIVE)
     tax = TaxRate.objects.create(org=org, name="VAT 20", rate=Decimal("20.00"), status=TaxRate.STATUS_ACTIVE)
-    receive_stock(org=org, product=product, initial_qty=Decimal("10.000"), unit_cost=Decimal("1.00"), label_code="LOT-COLA")
+    receive_stock(
+        org=org, product=product, initial_qty=Decimal("10.000"), unit_cost=Decimal("1.00"), label_code="LOT-COLA"
+    )
 
     OrderItem.objects.create(
         order=order,

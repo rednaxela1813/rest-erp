@@ -25,14 +25,14 @@ class UnitSerializer(serializers.ModelSerializer):
         # При создании: не допускаем активный дубль имени в org
         # При обновлении (позже): исключим self.instance
         qs = Unit.objects.filter(org=org, status=Unit.STATUS_ACTIVE, name=value)
-        if self.instance is not None:
-            qs = qs.exclude(pk=self.instance.pk)
+        instance = self.instance if isinstance(self.instance, Unit) else None
+        if instance is not None:
+            qs = qs.exclude(pk=instance.pk)
 
         if qs.exists():
             raise serializers.ValidationError("Unit with this name already exists.")
 
         return value
-
 
 
 class TaxRateSerializer(serializers.ModelSerializer):

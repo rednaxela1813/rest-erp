@@ -95,12 +95,6 @@ class StorageLocation(OrgScopedModel):
 
     def __str__(self) -> str:
         return self.name
-    
-    
-
-
-
-
 
 
 class StockMovement(OrgScopedModel):

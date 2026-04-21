@@ -18,6 +18,7 @@ def test_org_admin_can_create_partner(admin_client):
     assert "public_id" in data
 
     from apps.partners.models import Partner
+
     assert Partner.objects.filter(org=org, name="ACME s.r.o.").exists()
 
 
@@ -45,5 +46,6 @@ def test_partner_is_created_in_active_org_not_from_body(admin_client, org_factor
     assert resp.status_code == 201, resp.content
 
     from apps.partners.models import Partner
+
     assert Partner.objects.filter(org=org_1, name="Scoped").exists()
     assert not Partner.objects.filter(org=org_2, name="Scoped").exists()

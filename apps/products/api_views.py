@@ -1,4 +1,4 @@
-#apps/products/api_views.py
+# apps/products/api_views.py
 from rest_framework import generics
 from rest_framework.permissions import IsAuthenticated
 
@@ -12,19 +12,18 @@ from rest_framework import status as drf_status
 from rest_framework.response import Response
 
 
-
-
 class UnitListCreateApi(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated, IsOrgMemberReadOnlyOrOrgAdmin]
     serializer_class = UnitSerializer
 
     def get_queryset(self):
         org = get_request_org(self.request)
-        return Unit.objects.filter(org=org, status=Unit.STATUS_ACTIVE).order_by("id")
+        return Unit.objects.for_org(org).filter(status=Unit.STATUS_ACTIVE).order_by("id")
 
     def perform_create(self, serializer):
         org = get_request_org(self.request)
         serializer.save(org=org)
+
 
 class UnitDetailApi(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAuthenticated, IsOrgMemberReadOnlyOrOrgAdmin]
@@ -34,7 +33,7 @@ class UnitDetailApi(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         org = get_request_org(self.request)
-        return Unit.objects.filter(org=org)
+        return Unit.objects.for_org(org)
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
@@ -43,11 +42,10 @@ class UnitDetailApi(generics.RetrieveUpdateDestroyAPIView):
         return Response(status=drf_status.HTTP_204_NO_CONTENT)
 
 
-
 class TaxRateListApi(generics.ListAPIView):
     permission_classes = [IsAuthenticated, IsOrgMemberReadOnlyOrOrgAdmin]
     serializer_class = TaxRateSerializer
 
     def get_queryset(self):
         org = get_request_org(self.request)
-        return TaxRate.objects.filter(org=org, status=TaxRate.STATUS_ACTIVE).order_by("id")
+        return TaxRate.objects.for_org(org).filter(status=TaxRate.STATUS_ACTIVE).order_by("id")

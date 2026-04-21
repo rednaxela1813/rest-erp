@@ -3,7 +3,9 @@ from decimal import Decimal
 
 
 @pytest.mark.django_db
-def test_order_status_events_list_returns_events_for_order(admin_client, payment_factory, capture_payment_api, lot_factory):
+def test_order_status_events_list_returns_events_for_order(
+    admin_client, payment_factory, capture_payment_api, lot_factory
+):
     client, user, org = admin_client
 
     from decimal import Decimal
@@ -50,8 +52,8 @@ def test_order_status_events_list_returns_events_for_order(admin_client, payment
     assert event["from_status"] == Order.STATUS_DRAFT
     assert event["to_status"] == Order.STATUS_PAID
     assert "created_at" in event
-    
-    
+
+
 @pytest.mark.django_db
 def test_order_status_events_list_is_org_scoped(admin_client, org_factory):
     client, user, org = admin_client

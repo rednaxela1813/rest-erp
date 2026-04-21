@@ -33,7 +33,7 @@ def record_stock_receipt(*, lot: StockLot) -> AccountingEntry:
             "amount": cost,
             "tax_amount": Decimal("0.00"),  # НДС на закупку считается отдельно
             "currency": "EUR",
-            "partner": lot.supplier,        # поставщик
+            "partner": lot.supplier,  # поставщик
             "transaction_date": lot.received_at.date() if lot.received_at else timezone.localdate(),
             "note": f"Приход: {lot.product.name} x {lot.initial_qty} по {lot.unit_cost}",
         },

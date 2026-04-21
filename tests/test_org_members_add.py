@@ -3,9 +3,7 @@ import pytest
 pytestmark = pytest.mark.django_db
 
 
-def test_org_admin_can_add_member(
-    admin_client, user_factory, member_factory
-):
+def test_org_admin_can_add_member(admin_client, user_factory, member_factory):
     client, admin, org = admin_client
 
     new_user = user_factory(email="new@example.com")
@@ -30,9 +28,7 @@ def test_org_admin_can_add_member(
     ).exists()
 
 
-def test_org_member_cannot_add_member(
-    member_client, user_factory
-):
+def test_org_member_cannot_add_member(member_client, user_factory):
     client, member, org = member_client
 
     user_factory(email="evil@example.com")

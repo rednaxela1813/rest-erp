@@ -18,9 +18,20 @@ def test_order_items_list_is_scoped_to_order_and_org(member_client, org_factory)
     order_2 = Order.objects.create(org=org_1)
     other_org_order = Order.objects.create(org=org_2)
 
-    i1 = OrderItem.objects.create(order=order_1, product_name="Burger", qty=Decimal("1"), unit=unit, unit_price=Decimal("5.00"), tax_rate=tax)
-    OrderItem.objects.create(order=order_2, product_name="Fries", qty=Decimal("1"), unit=unit, unit_price=Decimal("2.00"), tax_rate=tax)
-    OrderItem.objects.create(order=other_org_order, product_name="Other", qty=Decimal("1"), unit=unit, unit_price=Decimal("1.00"), tax_rate=tax)
+    i1 = OrderItem.objects.create(
+        order=order_1, product_name="Burger", qty=Decimal("1"), unit=unit, unit_price=Decimal("5.00"), tax_rate=tax
+    )
+    OrderItem.objects.create(
+        order=order_2, product_name="Fries", qty=Decimal("1"), unit=unit, unit_price=Decimal("2.00"), tax_rate=tax
+    )
+    OrderItem.objects.create(
+        order=other_org_order,
+        product_name="Other",
+        qty=Decimal("1"),
+        unit=unit,
+        unit_price=Decimal("1.00"),
+        tax_rate=tax,
+    )
 
     resp = client.get(f"/api/v1/orders/{order_1.public_id}/items/")
     assert resp.status_code == 200, resp.content

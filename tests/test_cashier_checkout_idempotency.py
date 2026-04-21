@@ -38,6 +38,7 @@ def _prepare_cashier_session(*, client, org, user) -> CashierSession:
 
 def _prepare_product(*, org) -> Product:
     from apps.inventory.services.receive_stock import receive_stock
+
     unit = Unit.objects.create(org=org, name="pcs")
     tax_rate = TaxRate.objects.create(org=org, name="VAT 20", rate=Decimal("20.00"))
     product = Product.objects.create(
@@ -47,8 +48,11 @@ def _prepare_product(*, org) -> Product:
         tax_rate=tax_rate,
         unit_price=Decimal("5.00"),
     )
-    receive_stock(org=org, product=product, initial_qty=Decimal("10.000"), unit_cost=Decimal("1.00"), label_code="LOT-BURGER")
+    receive_stock(
+        org=org, product=product, initial_qty=Decimal("10.000"), unit_cost=Decimal("1.00"), label_code="LOT-BURGER"
+    )
     return product
+
 
 @pytest.mark.django_db
 def test_checkout_generates_idempotency_key_and_persists(cashier_client):
@@ -69,9 +73,7 @@ def test_checkout_generates_idempotency_key_and_persists(cashier_client):
 
     idempotency_map = client.session.get(cashier_views.SESSION_CHECKOUT_IDEMPOTENCY)
     assert isinstance(idempotency_map, dict)
-    fingerprint = cashier_views.cart_fingerprint(
-        cart={str(product.id): 1}, tender=OrderPayment.Tender.CARD
-    )
+    fingerprint = cashier_views.cart_fingerprint(cart={str(product.id): 1}, tender=OrderPayment.Tender.CARD)
     assert idempotency_map.get(fingerprint) == payment.idempotency_key
 
 
@@ -147,9 +149,7 @@ def test_confirm_cash_enqueues_fiscal_device_commands(cashier_client):
     confirm_resp = client.post(f"/cashier/payments/{payment.public_id}/confirm/cash/")
     assert confirm_resp.status_code == 302
 
-    command_types = set(
-        DeviceCommand.objects.filter(payment=payment).values_list("command_type", flat=True)
-    )
+    command_types = set(DeviceCommand.objects.filter(payment=payment).values_list("command_type", flat=True))
     assert command_types == {
         DeviceCommand.Type.FISCALIZE_SALE,
         DeviceCommand.Type.PRINT_RECEIPT,
@@ -195,13 +195,16 @@ def test_checkout_cash_with_ekasa_keeps_order_unpaid_until_fiscal_confirmation(c
     assert payment.status == OrderPayment.Status.CAPTURED
     assert payment.fiscal_status == OrderPayment.FiscalStatus.PENDING
     assert order.status == Order.STATUS_DRAFT
-    assert AccountingEntry.objects.filter(
-        org=org,
-        entry_type__in=[
-            AccountingEntry.EntryType.SALE_CASH,
-            AccountingEntry.EntryType.SALE_CARD,
-        ],
-    ).count() == 0
+    assert (
+        AccountingEntry.objects.filter(
+            org=org,
+            entry_type__in=[
+                AccountingEntry.EntryType.SALE_CASH,
+                AccountingEntry.EntryType.SALE_CARD,
+            ],
+        ).count()
+        == 0
+    )
 
 
 @pytest.mark.django_db

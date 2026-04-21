@@ -4,23 +4,21 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
-    dependencies = [
-    ]
+    dependencies = []
 
     operations = [
         migrations.CreateModel(
-            name='Currency',
+            name="Currency",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('code', models.CharField(max_length=3, unique=True)),
-                ('name', models.CharField(max_length=64)),
-                ('symbol', models.CharField(blank=True, default='', max_length=8)),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("code", models.CharField(max_length=3, unique=True)),
+                ("name", models.CharField(max_length=64)),
+                ("symbol", models.CharField(blank=True, default="", max_length=8)),
             ],
             options={
-                'ordering': ['code'],
+                "ordering": ["code"],
             },
         ),
     ]

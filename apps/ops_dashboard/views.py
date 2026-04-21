@@ -76,12 +76,8 @@ def _get_dashboard_metrics(org) -> dict:
         "capture_pending": OrderPayment.objects.filter(
             org=org, capture_status=OrderPayment.CaptureStatus.PENDING
         ).count(),
-        "fiscal_pending": OrderPayment.objects.filter(
-            org=org, fiscal_status=OrderPayment.FiscalStatus.PENDING
-        ).count(),
-        "fiscal_failed": OrderPayment.objects.filter(
-            org=org, fiscal_status=OrderPayment.FiscalStatus.FAILED
-        ).count(),
+        "fiscal_pending": OrderPayment.objects.filter(org=org, fiscal_status=OrderPayment.FiscalStatus.PENDING).count(),
+        "fiscal_failed": OrderPayment.objects.filter(org=org, fiscal_status=OrderPayment.FiscalStatus.FAILED).count(),
     }
 
     order_counts = {
@@ -90,9 +86,7 @@ def _get_dashboard_metrics(org) -> dict:
         "cancelled": Order.objects.filter(org=org, status=Order.STATUS_CANCELLED).count(),
     }
 
-    open_sessions = CashierSession.objects.filter(
-        org=org, status=CashierSession.STATUS_OPEN
-    ).count()
+    open_sessions = CashierSession.objects.filter(org=org, status=CashierSession.STATUS_OPEN).count()
 
     return {
         "fiscal_unsent_total": fiscal_qs.count(),
@@ -153,30 +147,38 @@ def _get_management_tables(org, start_dt, end_dt) -> dict:
         total = payments.filter(tender=tender).aggregate(amount=Sum("amount")).get("amount") or 0
         payments_by_tender.append({"tender": tender, "amount": total})
 
-    refunds_total = FiscalReceipt.objects.filter(
-        org=org,
-        receipt_type=FiscalReceipt.Type.REFUND,
-        created_at__gte=start_dt,
-        created_at__lt=end_dt,
-    ).aggregate(total=Sum("total")).get("total") or 0
-    storno_total = FiscalReceipt.objects.filter(
-        org=org,
-        receipt_type=FiscalReceipt.Type.STORNO,
-        created_at__gte=start_dt,
-        created_at__lt=end_dt,
-    ).aggregate(total=Sum("total")).get("total") or 0
+    refunds_total = (
+        FiscalReceipt.objects.filter(
+            org=org,
+            receipt_type=FiscalReceipt.Type.REFUND,
+            created_at__gte=start_dt,
+            created_at__lt=end_dt,
+        )
+        .aggregate(total=Sum("total"))
+        .get("total")
+        or 0
+    )
+    storno_total = (
+        FiscalReceipt.objects.filter(
+            org=org,
+            receipt_type=FiscalReceipt.Type.STORNO,
+            created_at__gte=start_dt,
+            created_at__lt=end_dt,
+        )
+        .aggregate(total=Sum("total"))
+        .get("total")
+        or 0
+    )
 
     top_products = (
-        OrderItem.objects
-        .filter(order__in=paid_orders)
+        OrderItem.objects.filter(order__in=paid_orders)
         .values("product_name")
         .annotate(qty=Sum("qty"))
         .order_by("-qty")[:10]
     )
 
     stock_levels = (
-        Product.objects
-        .filter(org=org)
+        Product.objects.filter(org=org)
         .annotate(
             stock_qty_annotated=Sum(
                 "stock_lots__remaining_qty",
@@ -251,12 +253,14 @@ def ops_dashboard_metrics_view(request):
 @login_required(login_url="/cashier/login/")
 def ops_dashboard_select_org_view(request):
     memberships = (
-        OrganizationMember.objects
-        .select_related("org")
-        .filter(user=request.user, role__in=[
-            OrganizationMember.ROLE_ADMIN,
-            OrganizationMember.ROLE_OWNER,
-        ])
+        OrganizationMember.objects.select_related("org")
+        .filter(
+            user=request.user,
+            role__in=[
+                OrganizationMember.ROLE_ADMIN,
+                OrganizationMember.ROLE_OWNER,
+            ],
+        )
         .order_by("org__name")
     )
     orgs = [membership.org for membership in memberships]
