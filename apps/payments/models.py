@@ -1,3 +1,4 @@
+# rest-erp/apps/payments/models.py
 from __future__ import annotations
 
 from decimal import Decimal
@@ -21,6 +22,9 @@ class Terminal(OrgScopedModel):
     name = models.CharField(max_length=255)
     code = models.CharField(max_length=64, blank=True, default="")
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_ACTIVE)
+    # NEXO HTTP endpoint — filled for card terminals, blank for cash-only setups.
+    host = models.CharField(max_length=255, blank=True, default="")
+    port = models.PositiveIntegerField(default=7500)
 
     class Meta:
         ordering = ["id"]

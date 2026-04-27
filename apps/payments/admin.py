@@ -1,3 +1,4 @@
+# rest-erp/apps/payments/admin.py
 from django.contrib import admin
 
 from apps.payments.logic.enqueue_device_commands import _build_fiscal_items
@@ -15,8 +16,8 @@ from .models import (
 
 @admin.register(Terminal)
 class TerminalAdmin(admin.ModelAdmin):
-    list_display = ("name", "org", "code", "status")
-    search_fields = ("name", "org__name", "code")
+    list_display = ("name", "org", "code", "host", "port", "status")
+    search_fields = ("name", "org__name", "code", "host")
     list_filter = ("status",)
 
 

@@ -58,6 +58,7 @@
       const success = root.querySelector(".pos-success");
       if (!success) return;
       redirected = true;
+      localStorage.removeItem("pos_cart_backup_{{ org.public_id|default:'default' }}");
       window.location.href = root.dataset.homeUrl || "{% url 'cashier:home' %}";
     };
 
