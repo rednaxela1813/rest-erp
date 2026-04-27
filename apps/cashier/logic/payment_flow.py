@@ -3,8 +3,8 @@ from __future__ import annotations
 from django.conf import settings
 from rest_framework.exceptions import ValidationError
 
-from apps.orders.logic.refund_order import refund_paid_order
 from apps.payments.logic.enqueue_device_commands import _build_fiscal_items, enqueue_payment_commands
+from apps.payments.logic.order_adjustments import refund_paid_order
 from apps.payments import tasks as payment_tasks
 from apps.payments.models import CashDrawerMovement, CashierSession, DeviceCommand, OrderPayment
 

@@ -16,8 +16,7 @@ from config.orgs.permissions import IsOrgMemberReadOnlyOrOrgAdmin
 
 from .logic.cancel_draft_order import cancel_draft_order
 from .logic.cancel_order import cancel_order
-from .logic.refund_order import refund_paid_order
-from .logic.storno_order import storno_paid_order
+from apps.payments.logic.order_adjustments import refund_paid_order, storno_paid_order
 from .models import KitchenTicket, Order, OrderItem, OrderStatusEvent
 from .serializers import (
     KitchenTicketSerializer,
