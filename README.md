@@ -13,7 +13,7 @@ The codebase currently includes:
 - products, partners, equipment, inventory, recipes, and accounting models
 - draft orders, order items, status history, refund/storno flows, and kitchen tickets
 - payment start/capture/status flow, manual resolution, device command queue, and shifts
-- mock fiscal mode and eKasa integration switches
+- mock fiscal mode, eKasa integration switches, and NEXO terminal support
 - cashier UI, kitchen board, ops dashboard, and logs dashboard
 
 Not everything above is exposed as public REST endpoints yet. Some parts currently exist as models, admin integration, services, and internal logic.
@@ -46,6 +46,10 @@ rest-erp/
 │   ├── orders/
 │   ├── partners/
 │   ├── payments/
+│   │   ├── ekasa/
+│   │   ├── logic/
+│   │   ├── nexo/
+│   │   └── providers/
 │   ├── products/
 │   └── recipes/
 ├── config/
@@ -107,20 +111,34 @@ Important variables:
 - `CELERY_BROKER_URL`
 - `CELERY_RESULT_BACKEND`
 - `DEVICE_COMMANDS_REDIS_URL`
+- `DEVICE_COMMANDS_STREAM`
+- `DEVICE_COMMANDS_STREAM_MAXLEN`
+- `DEVICE_COMMANDS_RETRY_BASE_SECONDS`
+- `DEVICE_COMMANDS_RETRY_MAX_SECONDS`
 - `FISCAL_MOCK_ENABLED`
 - `FISCAL_MOCK_OFFLINE`
 - `EKASA_ENABLED`
 - `EKASA_BASE_URL`
 - `EKASA_API_KEY`
+- `EKASA_TIMEOUT_S`
 - `EKASA_USERNAME`
 - `EKASA_PASSWORD`
 - `EKASA_CASH_REGISTER_CODE`
 - `FISCAL_RECONCILE_ENABLED`
+- `DEFAULT_CURRENCY`
+- `CASHIER_DEVICE_TOKEN`
+- `LOG_LEVEL`
+- `CORS_ALLOWED_ORIGINS`
+- `CORS_ALLOW_CREDENTIALS`
+- `CSP_REPORT_ONLY`
 - `LOG_DB_ENABLED`
+- `LOG_RETENTION_ENABLED`
+- `LOG_RETENTION_DAYS`
 
 Rules enforced by settings:
 
 - `FISCAL_MOCK_ENABLED` and `EKASA_ENABLED` cannot both be `true`
+- production settings require `CASHIER_DEVICE_TOKEN`
 - `manage.py` defaults to `core.settings.dev`
 - pytest also uses `core.settings.dev`
 
@@ -416,9 +434,26 @@ pytest -m integration
 - `/cashier/session/close/`
 - `/cashier/products/`
 - `/cashier/cart/`
+- `/cashier/cart/add/{product_id}/`
+- `/cashier/cart/add-barcode/`
+- `/cashier/cart/remove/{product_id}/`
+- `/cashier/cart/clear/`
+- `/cashier/cart/restore/`
 - `/cashier/kitchen/`
+- `/cashier/kitchen/panel/`
+- `/cashier/kitchen/next/`
+- `/cashier/kitchen/tickets/{public_id}/`
 - `/cashier/checkout/`
 - `/cashier/payments/{public_id}/`
+- `/cashier/payments/{public_id}/status/`
+- `/cashier/payments/{public_id}/retry-fiscal/`
+- `/cashier/payments/{public_id}/confirm/cash/`
+- `/cashier/payments/{public_id}/confirm/card/`
+- `/cashier/device/payments/{public_id}/cash/`
+- `/cashier/device/payments/{public_id}/card/`
+- `/cashier/drafts/{public_id}/pay/{tender}/`
+- `/cashier/drafts/{public_id}/cancel/`
+- `/cashier/orders/{public_id}/refund/`
 - `/dashboard/`
 - `/dashboard/metrics/`
 - `/dashboard/select-org/`
@@ -426,8 +461,9 @@ pytest -m integration
 
 ## Architecture Notes
 
-- The project is a modular monolith with one Django app and a shared PostgreSQL database.
-- Business logic is intentionally pushed into `logic/` and `services/` modules.
+- The project is a modular monolith with multiple Django apps and a shared PostgreSQL database.
+- HTTP views, API views, and Celery tasks are kept thin where practical; business logic is intentionally pushed into focused `logic/` and `services/` modules.
+- The cashier UI is server-rendered, while cart, checkout, payment confirmation, fiscalization, session, and device-callback behavior lives in `apps/cashier/logic/`.
 - Inventory relies on stock lots and stock movements rather than a simple product counter.
 - Payment and order-finalization flows use transactions and row-level locking.
 - Device integration is organized around queued commands and async workers.
