@@ -4,10 +4,10 @@ from rest_framework import serializers
 
 from config.orgs.org_context import get_request_org
 
-from .logic.create_order_item import create_order_item
+from .logic.create_order_item import create_order_item, create_order_item_record
 from .logic.kitchen_tickets import UPDATABLE_TICKET_STATUSES
 from .logic.status_fsm import assert_can_transition
-from .models import KitchenTicket, Order, OrderItem, OrderItemAddon, OrderStatusEvent
+from .models import KitchenTicket, Order, OrderItem, OrderStatusEvent
 
 
 class OrderSerializer(serializers.ModelSerializer):
@@ -93,48 +93,7 @@ class OrderItemCreateSerializer(serializers.ModelSerializer):
         return create_order_item(attrs, org)
 
     def create(self, validated_data):
-        """
-        Создаём OrderItem:
-        - заменяем UUID-идентификаторы на FK объекты
-        - записываем snapshot product_name
-        """
-        product_obj = validated_data.pop("product_obj")
-        unit_obj = validated_data.pop("unit_obj")
-        tax_obj = validated_data.pop("tax_obj")
-        variant_obj = validated_data.pop("variant_obj", None)
-        addon_objs = validated_data.pop("addon_objs", [])
-
-        validated_data.pop("product", None)
-        validated_data.pop("unit", None)
-        validated_data.pop("tax_rate", None)
-        validated_data.pop("variant", None)
-        validated_data.pop("addons", None)
-
-        validated_data["product_name"] = product_obj.name
-        validated_data["variant_name"] = variant_obj.name if variant_obj else ""
-
-        item = OrderItem.objects.create(
-            product=product_obj,
-            unit=unit_obj,
-            tax_rate=tax_obj,
-            variant=variant_obj,
-            **validated_data,
-        )
-
-        if addon_objs:
-            OrderItemAddon.objects.bulk_create(
-                [
-                    OrderItemAddon(
-                        order_item=item,
-                        addon=addon,
-                        name=addon.name,
-                        price=addon.price,
-                        qty=item.qty,
-                    )
-                    for addon in addon_objs
-                ]
-            )
-        return item
+        return create_order_item_record(validated_data)
 
 
 class OrderStatusEventSerializer(serializers.ModelSerializer):
