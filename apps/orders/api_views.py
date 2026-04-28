@@ -7,7 +7,6 @@ import structlog
 from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from django.db import transaction
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 
@@ -16,6 +15,7 @@ from config.orgs.permissions import IsOrgMemberReadOnlyOrOrgAdmin
 
 from .logic.cancel_draft_order import cancel_draft_order
 from .logic.cancel_order import cancel_order
+from .logic.kitchen_tickets import claim_next_ticket, filtered_tickets, ticket_queue
 from apps.payments.logic.order_adjustments import refund_paid_order, storno_paid_order
 from .models import KitchenTicket, Order, OrderItem, OrderStatusEvent
 from .serializers import (
@@ -212,14 +212,7 @@ class KitchenTicketListApi(generics.ListAPIView):
 
     def get_queryset(self):
         org = get_request_org(self.request)
-        qs = KitchenTicket.objects.for_org(org).select_related("order", "product").order_by("created_at", "id")
-        status_param = self.request.query_params.get("status")
-        if status_param:
-            statuses = [s.strip() for s in status_param.split(",") if s.strip()]
-            qs = qs.filter(status__in=statuses)
-        else:
-            qs = qs.filter(status=KitchenTicket.Status.PENDING)
-        return qs
+        return filtered_tickets(org=org, status_param=self.request.query_params.get("status"))
 
 
 class KitchenTicketUpdateApi(generics.RetrieveUpdateAPIView):
@@ -242,24 +235,15 @@ class KitchenTicketClaimNextApi(APIView):
 
     def post(self, request):
         org = get_request_org(request)
-        with transaction.atomic():
-            ticket = (
-                KitchenTicket.objects.select_for_update()
-                .for_org(org)
-                .filter(status=KitchenTicket.Status.PENDING)
-                .order_by("created_at", "id")
-                .select_related("order", "product")
-                .first()
+        ticket = claim_next_ticket(org=org)
+        if not ticket:
+            logger.info(
+                "kitchen_ticket_claim_next_empty",
+                org_id=str(org.public_id),
+                user_id=str(request.user.id),
             )
-            if not ticket:
-                logger.info(
-                    "kitchen_ticket_claim_next_empty",
-                    org_id=str(org.public_id),
-                    user_id=str(request.user.id),
-                )
-                return Response(status=status.HTTP_204_NO_CONTENT)
-            ticket.status = KitchenTicket.Status.IN_PROGRESS
-            ticket.save(update_fields=["status", "updated_at"])
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
         logger.info(
             "kitchen_ticket_claim_next_succeeded",
             org_id=str(org.public_id),
@@ -274,36 +258,12 @@ class KitchenTicketClaimNextWithQueueApi(APIView):
 
     def post(self, request):
         org = get_request_org(request)
-        claimed = None
-        with transaction.atomic():
-            claimed = (
-                KitchenTicket.objects.select_for_update()
-                .for_org(org)
-                .filter(status=KitchenTicket.Status.PENDING)
-                .order_by("created_at", "id")
-                .select_related("order", "product")
-                .first()
-            )
-            if claimed:
-                claimed.status = KitchenTicket.Status.IN_PROGRESS
-                claimed.save(update_fields=["status", "updated_at"])
-
-        pending = (
-            KitchenTicket.objects.for_org(org)
-            .filter(status=KitchenTicket.Status.PENDING)
-            .select_related("order", "product")
-            .order_by("created_at", "id")
-        )
-        in_progress = (
-            KitchenTicket.objects.for_org(org)
-            .filter(status=KitchenTicket.Status.IN_PROGRESS)
-            .select_related("order", "product")
-            .order_by("created_at", "id")
-        )
+        claimed = claim_next_ticket(org=org)
+        queue = ticket_queue(org=org)
 
         payload = {
             "claimed": KitchenTicketSerializer(claimed).data if claimed else None,
-            "pending": KitchenTicketSerializer(pending, many=True).data,
-            "in_progress": KitchenTicketSerializer(in_progress, many=True).data,
+            "pending": KitchenTicketSerializer(queue["pending"], many=True).data,
+            "in_progress": KitchenTicketSerializer(queue["in_progress"], many=True).data,
         }
         return Response(payload)

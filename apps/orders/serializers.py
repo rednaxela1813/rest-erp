@@ -4,9 +4,10 @@ from rest_framework import serializers
 
 from config.orgs.org_context import get_request_org
 
-from .models import KitchenTicket, Order, OrderItem, OrderItemAddon, OrderStatusEvent
 from .logic.create_order_item import create_order_item
+from .logic.kitchen_tickets import UPDATABLE_TICKET_STATUSES
 from .logic.status_fsm import assert_can_transition
+from .models import KitchenTicket, Order, OrderItem, OrderItemAddon, OrderStatusEvent
 
 
 class OrderSerializer(serializers.ModelSerializer):
@@ -172,11 +173,6 @@ class KitchenTicketUpdateSerializer(serializers.ModelSerializer):
         fields = ["status"]
 
     def validate_status(self, value: str) -> str:
-        allowed = {
-            KitchenTicket.Status.IN_PROGRESS,
-            KitchenTicket.Status.DONE,
-            KitchenTicket.Status.CANCELLED,
-        }
-        if value not in allowed:
+        if value not in UPDATABLE_TICKET_STATUSES:
             raise serializers.ValidationError("Invalid status.")
         return value

@@ -19,14 +19,12 @@ import structlog
 from django.conf import settings
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
-from django.db import IntegrityError
 from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 from django.views.decorators.http import require_http_methods
-from rest_framework.exceptions import ValidationError
 
-from apps.orders.logic.cancel_draft_order import cancel_draft_order
+from apps.orders.logic.kitchen_tickets import InvalidKitchenTicketStatus, claim_next_ticket, update_ticket_status
 from apps.orders.models import Order
 from apps.payments.logic.shift import close_shift
 from apps.payments.models import CashierSession, OrderPayment
@@ -52,13 +50,15 @@ from .logic.cart_actions import (
     restore_cart,
 )
 from .logic.checkout_flow import checkout_cart
-from .logic.home import cashier_home_context
-from .logic.kitchen import InvalidKitchenTicketStatus, claim_next_ticket, kitchen_context, update_ticket_status
-from .logic.payment_confirm import (
-    confirm_card_payment,
-    confirm_cash_payment,
-    create_payment,
+from .logic.device_confirm import (
+    OpenCashierSessionRequired,
+    confirm_device_card_payment,
+    confirm_device_cash_payment,
 )
+from .logic.draft_actions import cancel_draft_from_cashier, start_draft_payment
+from .logic.home import cashier_home_context
+from .logic.kitchen import kitchen_context
+from .logic.payment_confirm import confirm_card_payment, confirm_cash_payment
 from .logic.payment_flow import build_payment_status_context, refund_order_from_cashier, retry_fiscalization
 from .logic.session import cash_drawer_total, get_active_session
 from .logic.session_actions import (
@@ -483,33 +483,9 @@ def draft_pay(request: HttpRequest, public_id, tender: str) -> HttpResponse:
     if isinstance(session, HttpResponse):
         return session
 
-    if tender not in (OrderPayment.Tender.CASH, OrderPayment.Tender.CARD):
+    payment = start_draft_payment(org=session.org, public_id=public_id, session=session, tender=tender)
+    if payment is None:
         return redirect("cashier:home")
-
-    order = get_object_or_404(Order, org=session.org, public_id=public_id)
-    if order.status != Order.STATUS_DRAFT or not order.items.exists():
-        return redirect("cashier:home")
-
-    order.recompute_totals()
-    order.save(update_fields=["subtotal", "tax_total", "total", "updated_at"])
-
-    idempotency_key = f"draft:{order.public_id}:{tender}"
-    existing = OrderPayment.objects.filter(org=session.org, idempotency_key=idempotency_key).first()
-    if existing:
-        return redirect("cashier:payment_wait", public_id=existing.public_id)
-
-    try:
-        payment = create_payment(
-            order=order,
-            session=session,
-            tender=tender,
-            idempotency_key=idempotency_key,
-        )
-    except IntegrityError:
-        existing = OrderPayment.objects.filter(org=session.org, idempotency_key=idempotency_key).first()
-        if existing:
-            return redirect("cashier:payment_wait", public_id=existing.public_id)
-        raise
 
     return redirect("cashier:payment_wait", public_id=payment.public_id)
 
@@ -521,11 +497,7 @@ def draft_cancel(request: HttpRequest, public_id) -> HttpResponse:
     if isinstance(session, HttpResponse):
         return session
 
-    order = get_object_or_404(Order, org=session.org, public_id=public_id)
-    try:
-        cancel_draft_order(order=order, actor=request.user)
-    except ValidationError:
-        pass
+    cancel_draft_from_cashier(org=session.org, public_id=public_id, actor=request.user)
     return redirect("cashier:home")
 
 
@@ -553,17 +525,11 @@ def device_cash_confirm(request: HttpRequest, public_id) -> HttpResponse:
     if not _device_signature_ok(request):
         return _device_auth_failed_response(request)
 
-    payment = get_object_or_404(OrderPayment, public_id=public_id)
-    session = (
-        CashierSession.objects.select_related("org", "terminal")
-        .filter(org=payment.org, status=CashierSession.STATUS_OPEN)
-        .first()
-    )
-    if session is None:
+    try:
+        confirm_device_cash_payment(public_id=public_id, logger=logger)
+    except OpenCashierSessionRequired:
         return HttpResponseForbidden("no open session")
 
-    confirm_cash_payment(payment=payment, actor=None, session=session)
-    logger.info("cashier_device_cash_confirm_succeeded", payment_id=str(payment.public_id))
     return HttpResponse("ok")
 
 
@@ -573,15 +539,9 @@ def device_card_confirm(request: HttpRequest, public_id) -> HttpResponse:
     if not _device_signature_ok(request):
         return _device_auth_failed_response(request)
 
-    payment = get_object_or_404(OrderPayment, public_id=public_id)
-    session = (
-        CashierSession.objects.select_related("org", "terminal")
-        .filter(org=payment.org, status=CashierSession.STATUS_OPEN)
-        .first()
-    )
-    if session is None:
+    try:
+        confirm_device_card_payment(public_id=public_id, logger=logger)
+    except OpenCashierSessionRequired:
         return HttpResponseForbidden("no open session")
 
-    confirm_card_payment(payment=payment, actor=None, session=session)
-    logger.info("cashier_device_card_confirm_succeeded", payment_id=str(payment.public_id))
     return HttpResponse("ok")
