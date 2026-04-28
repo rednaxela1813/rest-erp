@@ -14,15 +14,12 @@ from __future__ import annotations
 import hashlib
 import hmac
 import time
-from decimal import Decimal
 
 import structlog
 from django.conf import settings
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
-from django.db import IntegrityError, transaction
-from django.db.models import Count, Q, Sum, Value
-from django.db.models.functions import Coalesce
+from django.db import IntegrityError
 from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
@@ -30,7 +27,7 @@ from django.views.decorators.http import require_http_methods
 from rest_framework.exceptions import ValidationError
 
 from apps.orders.logic.cancel_draft_order import cancel_draft_order
-from apps.orders.models import KitchenTicket, Order
+from apps.orders.models import Order
 from apps.payments.logic.shift import close_shift
 from apps.payments.models import CashierSession, OrderPayment
 from apps.products.models import Product
@@ -44,22 +41,25 @@ from .logic.cart import (
     SESSION_SESSION_ID,
     build_cart_context,
     cart_fingerprint,
-    cart_items,
-    cart_totals,
     get_cart,
     get_products,
-    reset_checkout_idempotency,
-    restore_cart_from_payload,
+)
+from .logic.cart_actions import (
+    add_barcode_to_cart,
+    add_product_to_cart,
+    clear_cart,
+    remove_product_from_cart,
+    restore_cart,
 )
 from .logic.checkout_flow import checkout_cart
-from .logic.kitchen import kitchen_context
+from .logic.home import cashier_home_context
+from .logic.kitchen import InvalidKitchenTicketStatus, claim_next_ticket, kitchen_context, update_ticket_status
 from .logic.payment_confirm import (
     confirm_card_payment,
     confirm_cash_payment,
     create_payment,
 )
 from .logic.payment_flow import build_payment_status_context, refund_order_from_cashier, retry_fiscalization
-from .logic.order_builder import product_checkout_error
 from .logic.session import cash_drawer_total, get_active_session
 from .logic.session_actions import (
     build_session_close_context,
@@ -210,48 +210,15 @@ def cashier_home(request: HttpRequest) -> HttpResponse:
     if isinstance(session, HttpResponse):
         return session
 
-    org = session.org
-    products = get_products(org)
-    cart = get_cart(request.session)
-    items = cart_items(cart, org)
-    totals = cart_totals(items)
-
-    draft_orders = (
-        Order.objects.filter(org=org, status=Order.STATUS_DRAFT)
-        .annotate(items_count=Count("items"))
-        .filter(items_count__gt=0)
-        .order_by("-created_at")[:10]
-    )
-    paid_orders = Order.objects.filter(org=org, status=Order.STATUS_PAID).order_by("-created_at")[:10]
-    drawer_total = cash_drawer_total(session)
-    todays_sales_total = (
-        OrderPayment.objects.filter(
-            org=org,
-            terminal=session.terminal,
-            status=OrderPayment.Status.CAPTURED,
-            tender__in=[OrderPayment.Tender.CASH, OrderPayment.Tender.CARD],
-            captured_at__gte=session.opened_at,
-        ).aggregate(total=Coalesce(Sum("amount"), Value(Decimal("0.00"))))["total"]
-    ).quantize(Decimal("0.01"))
-
     return render(
         request,
         "cashier/index.html",
-        {
-            "org": org,
-            "session": session,
-            "products": products,
-            "cart_items": items,
-            "cart_count": sum(cart.values()) if cart else 0,
-            "totals": totals,
-            "currency": settings.DEFAULT_CURRENCY,
-            "draft_orders": draft_orders,
-            "paid_orders": paid_orders,
-            "cash_drawer_total": drawer_total,
-            "todays_sales_total": todays_sales_total,
-            "cart_error": request.session.pop(SESSION_CHECKOUT_ERROR, ""),
-            "refund_error": request.session.pop(SESSION_REFUND_ERROR, ""),
-        },
+        cashier_home_context(
+            request_session=request.session,
+            session=session,
+            cart_error=request.session.pop(SESSION_CHECKOUT_ERROR, ""),
+            refund_error=request.session.pop(SESSION_REFUND_ERROR, ""),
+        ),
     )
 
 
@@ -300,20 +267,10 @@ def cart_add(request: HttpRequest, product_id: int) -> HttpResponse:
         return redirect("cashier:session_open")
 
     product = get_object_or_404(Product, id=product_id, org=session.org)
-    cart = get_cart(request.session)
-    error = ""
-    if not product.unit or not product.tax_rate:
-        error = product_checkout_error(product)
-    else:
-        key = str(product.id)
-        cart[key] = cart.get(key, 0) + 1
-        reset_checkout_idempotency(request.session)
-        request.session.modified = True
-
     return render(
         request,
         "cashier/partials/cart.html",
-        build_cart_context(cart, session.org, last_added=product, cart_error=error),
+        add_product_to_cart(request_session=request.session, session=session, product=product),
     )
 
 
@@ -325,23 +282,8 @@ def cart_add_barcode(request: HttpRequest) -> HttpResponse:
         return redirect("cashier:session_open")
 
     barcode = request.POST.get("barcode", "").strip()
-    product = Product.objects.filter(org=session.org, barcode=barcode).first()
-    cart = get_cart(request.session)
-    error = ""
-
-    if not barcode:
-        error = "Barcode is required."
-    elif not product:
-        error = f"Product with barcode {barcode} not found."
-    elif not product.unit or not product.tax_rate:
-        error = product_checkout_error(product)
-    else:
-        key = str(product.id)
-        cart[key] = cart.get(key, 0) + 1
-        reset_checkout_idempotency(request.session)
-        request.session.modified = True
-
-    return render(request, "cashier/partials/cart.html", build_cart_context(cart, session.org, cart_error=error))
+    context = add_barcode_to_cart(request_session=request.session, session=session, barcode=barcode)
+    return render(request, "cashier/partials/cart.html", context)
 
 
 @login_required
@@ -352,18 +294,8 @@ def cart_remove(request: HttpRequest, product_id: int) -> HttpResponse:
         return redirect("cashier:session_open")
 
     product = get_object_or_404(Product, id=product_id, org=session.org)
-    cart = get_cart(request.session)
-    key = str(product.id)
-    if key in cart:
-        new_qty = cart[key] - 1
-        if new_qty <= 0:
-            cart.pop(key, None)
-        else:
-            cart[key] = new_qty
-        reset_checkout_idempotency(request.session)
-        request.session.modified = True
-
-    return render(request, "cashier/partials/cart.html", build_cart_context(cart, session.org))
+    context = remove_product_from_cart(request_session=request.session, session=session, product=product)
+    return render(request, "cashier/partials/cart.html", context)
 
 
 @login_required
@@ -373,22 +305,8 @@ def cart_clear(request: HttpRequest) -> HttpResponse:
     if not session:
         return redirect("cashier:session_open")
 
-    cart = get_cart(request.session)
-    cart.clear()
-    reset_checkout_idempotency(request.session)
-    request.session.modified = True
-
-    return render(
-        request,
-        "cashier/partials/cart.html",
-        {
-            "org": session.org,
-            "cart_items": [],
-            "cart_count": 0,
-            "totals": {"subtotal": Decimal("0.00"), "total": Decimal("0.00")},
-            "currency": settings.DEFAULT_CURRENCY,
-        },
-    )
+    context = clear_cart(request_session=request.session, session=session)
+    return render(request, "cashier/partials/cart.html", context)
 
 
 @login_required
@@ -398,12 +316,8 @@ def cart_restore(request: HttpRequest) -> HttpResponse:
     if not session:
         return redirect("cashier:session_open")
 
-    cart = restore_cart_from_payload(request.POST.get("items", "[]"), session.org)
-    request.session[SESSION_CART] = cart
-    reset_checkout_idempotency(request.session)
-    request.session.modified = True
-
-    return render(request, "cashier/partials/cart.html", build_cart_context(cart, session.org, cart_error=""))
+    context = restore_cart(request_session=request.session, session=session, raw_items=request.POST.get("items", "[]"))
+    return render(request, "cashier/partials/cart.html", context)
 
 
 # ── Kitchen ──────────────────────────────────────────────────────────────────
@@ -444,17 +358,7 @@ def kitchen_claim_next(request: HttpRequest) -> HttpResponse:
     if isinstance(session, HttpResponse):
         return session
 
-    with transaction.atomic():
-        ticket = (
-            KitchenTicket.objects.select_for_update()
-            .filter(org=session.org, status=KitchenTicket.Status.PENDING)
-            .order_by("created_at", "id")
-            .first()
-        )
-        if ticket:
-            ticket.status = KitchenTicket.Status.IN_PROGRESS
-            ticket.save(update_fields=["status", "updated_at"])
-
+    claim_next_ticket(org=session.org)
     return render(request, "cashier/partials/kitchen_panel.html", kitchen_context(session.org))
 
 
@@ -465,14 +369,10 @@ def kitchen_update(request: HttpRequest, public_id) -> HttpResponse:
     if isinstance(session, HttpResponse):
         return session
 
-    status_value = request.POST.get("status")
-    allowed = {KitchenTicket.Status.IN_PROGRESS, KitchenTicket.Status.DONE, KitchenTicket.Status.CANCELLED}
-    if status_value not in allowed:
+    try:
+        update_ticket_status(org=session.org, public_id=public_id, status=request.POST.get("status", ""))
+    except InvalidKitchenTicketStatus:
         return HttpResponseBadRequest("invalid status")
-
-    ticket = get_object_or_404(KitchenTicket, org=session.org, public_id=public_id)
-    ticket.status = status_value
-    ticket.save(update_fields=["status", "updated_at"])
 
     return render(request, "cashier/partials/kitchen_panel.html", kitchen_context(session.org))
 
