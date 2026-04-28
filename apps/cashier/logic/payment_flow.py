@@ -9,7 +9,7 @@ from apps.payments import tasks as payment_tasks
 from apps.payments.models import CashDrawerMovement, CashierSession, DeviceCommand, OrderPayment
 
 from .cart import SESSION_REFUND_ERROR
-from .payment_confirm import trigger_ekasa_processing
+from .ekasa import trigger_ekasa_processing
 
 
 FISCAL_COMMAND_TYPES = [

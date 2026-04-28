@@ -9,7 +9,6 @@ _confirm_cash_payment и _confirm_card_payment — это UI-специфичн�
 
 from __future__ import annotations
 
-import structlog
 from django.conf import settings
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
@@ -19,25 +18,11 @@ from apps.orders.logic.finalize_paid_order import finalize_paid_order
 from apps.payments.logic.authorize_payment import authorize_payment
 from apps.payments.logic.capture_payment import capture_payment
 from apps.payments.logic.enqueue_device_commands import enqueue_payment_commands
-from apps.payments.models import CashDrawerMovement, CashierSession, OrderPayment
+from apps.payments.models import CashierSession, OrderPayment
 
-from ..integrations import send_fiscal_receipt, send_receipt_to_printer
-
-logger = structlog.get_logger(__name__)
-
-
-def trigger_ekasa_processing(org_id: int) -> None:
-    """Запускает обработку очереди eKasa команд если интеграция включена."""
-    if not settings.EKASA_ENABLED:
-        return
-    from apps.payments.tasks import process_device_commands_ekasa
-
-    process_device_commands_ekasa.delay(org_id=org_id, limit=50)
-
-
-def send_receipts(*, order, payment: OrderPayment, session: CashierSession) -> None:
-    send_receipt_to_printer(order=order, payment=payment, session=session)
-    send_fiscal_receipt(order=order, payment=payment, session=session)
+from .cash_drawer import record_cash_sale
+from .ekasa import trigger_ekasa_processing
+from .receipts import send_receipts
 
 
 def confirm_cash_payment(*, payment: OrderPayment, actor, session: CashierSession) -> OrderPayment:
@@ -70,12 +55,7 @@ def confirm_cash_payment(*, payment: OrderPayment, actor, session: CashierSessio
             return payment
         record_sale(order=payment.order, tender=payment.tender)
 
-    CashDrawerMovement.objects.create(
-        session=session,
-        actor=actor,
-        movement_type=CashDrawerMovement.Type.SALE_CASH,
-        amount=payment.amount,
-    )
+    record_cash_sale(payment=payment, session=session, actor=actor)
     include_kot = payment.order.kitchen_tickets.exists()
     enqueue_payment_commands(
         payment=payment,
