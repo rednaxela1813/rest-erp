@@ -7,14 +7,12 @@ import structlog
 from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 
 from config.orgs.org_context import get_request_org
 from config.orgs.permissions import IsOrgMemberReadOnlyOrOrgAdmin
 
-from .logic.cancel_draft_order import cancel_draft_order
-from .logic.cancel_order import cancel_order
+from .logic.api_order_actions import add_item_to_order_from_api, update_order_from_api
 from .logic.kitchen_tickets import claim_next_ticket, filtered_tickets, ticket_queue
 from apps.payments.logic.order_adjustments import refund_paid_order, storno_paid_order
 from .models import KitchenTicket, Order, OrderItem, OrderStatusEvent
@@ -61,19 +59,7 @@ class OrderItemListCreateApi(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         order = self.get_order()
-
-        if order.status != Order.STATUS_DRAFT:
-            logger.warning(
-                "order_item_create_rejected_non_draft_order",
-                order_id=str(order.public_id),
-                order_status=order.status,
-            )
-            raise ValidationError({"order": "Cannot modify items for non-draft order."})
-
-        serializer.save(order=order)
-
-        order.recompute_totals()
-        order.save(update_fields=["subtotal", "tax_total", "total", "updated_at"])
+        add_item_to_order_from_api(order=order, serializer=serializer, logger=logger)
 
 
 class OrderDetailApi(generics.RetrieveUpdateAPIView):
@@ -88,34 +74,7 @@ class OrderDetailApi(generics.RetrieveUpdateAPIView):
 
     def perform_update(self, serializer):
         order = self.get_object()
-
-        if "status" not in serializer.validated_data:
-            serializer.save()
-            return
-
-        new_status = serializer.validated_data["status"]
-        old_status = order.status
-
-        if new_status == Order.STATUS_PAID:
-            logger.warning(
-                "order_update_rejected_direct_paid_transition",
-                order_id=str(order.public_id),
-                old_status=old_status,
-                new_status=new_status,
-            )
-            raise ValidationError({"status": ["Direct order payment is blocked. Use payment capture endpoint."]})
-
-        if new_status == Order.STATUS_CANCELLED:
-            if old_status == Order.STATUS_DRAFT:
-                updated = cancel_draft_order(order=order, actor=self.request.user)
-                serializer.instance = updated
-                return
-
-            updated = cancel_order(order=order, actor=self.request.user)
-            serializer.instance = updated
-            return
-
-        serializer.save()
+        update_order_from_api(order=order, serializer=serializer, actor=self.request.user, logger=logger)
 
 
 class OrderStatusEventListApi(generics.ListAPIView):
